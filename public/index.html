@@ -261,9 +261,15 @@
   }
 
   // send to server
-  async function sendToServer(messageText, modelKey) {
-    const headers = { 'Content-Type': 'application/json' };
-    if (SERVER_API_KEY) headers['x-api-key'] = SERVER_API_KEY;
+ const res = await fetch("/api/chat", {
+  method:"POST",
+  headers: { "Content-Type":"application/json" },
+  body: JSON.stringify({
+    message: msg,
+    conversation_id: convId,
+    model
+  })
+});
 
     const body = {
       message: messageText,
