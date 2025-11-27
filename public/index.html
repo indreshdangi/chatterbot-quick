@@ -1,27 +1,35 @@
+<!-- public/index.html -->
 <!doctype html>
 <html lang="hi">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Indresh 2.0 — Multi-Model</title>
+  <title>Indresh 2.0 — Multi-Model Chat</title>
   <link rel="icon" href="/favicon.ico">
   <style>
     :root{
       --bg:#0d0d15; --panel:#161622; --user:#2a2a3a; --ai:#1e1e2e;
       --text:#f0f0f0; --muted:rgba(255,255,255,0.6); --accent:#e0a0ff; --border:rgba(255,255,255,0.06);
+      --glass: rgba(255,255,255,0.04);
     }
-    .light{ --bg:#f2f4f8; --panel:rgba(255,255,255,0.9); --user:#f7f7fb; --ai:#ffffff; --text:#111; --muted:rgba(0,0,0,0.5); --accent:#6b5dfc; --border:rgba(16,16,24,0.06); }
+    .theme-light {
+      --bg: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(250,250,250,0.98));
+      --panel: rgba(255,255,255,0.9);
+      --user:#ffffff; --ai:#ffffff; --text:#111; --muted:rgba(0,0,0,0.55); --accent:#7b61ff; --border:rgba(16,16,24,0.06);
+      --glass: rgba(255,255,255,0.7);
+    }
     *{box-sizing:border-box;margin:0;padding:0}
-    html,body{height:100%}
-    body{font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; background:var(--bg); color:var(--text); display:flex; align-items:center; justify-content:center; padding:12px;}
-    .card{width:940px;max-width:96%;background:var(--panel);border-radius:12px;padding:12px;border:1px solid var(--border);display:flex;flex-direction:column;height:88vh;box-shadow:0 10px 30px rgba(0,0,0,0.35);overflow:hidden}
-    .header{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;gap:8px}
+    html,body{height:100%;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text);display:flex;align-items:center;justify-content:center;padding:12px}
+    .card{width:920px;max-width:98%;background:var(--panel);border-radius:14px;padding:12px;border:1px solid var(--border);display:flex;flex-direction:column;height:86vh;box-shadow:0 20px 40px rgba(0,0,0,0.35);overflow:hidden}
+    .header{display:flex;justify-content:space-between;align-items:center;padding:8px 12px}
     .logo{display:flex;gap:10px;align-items:center}
     .logo-icon{width:42px;height:42;border-radius:50%;background:linear-gradient(135deg,#d0a0ff,#a080ff);display:flex;align-items:center;justify-content:center;color:#111;font-weight:800}
+    .logo-text{font-weight:700}
     .tiny{font-size:12px;color:var(--muted)}
     .controls{display:flex;gap:8px;align-items:center}
     select,button{background:transparent;border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;cursor:pointer}
-    .model-note{font-size:12px;color:var(--muted);min-width:220px}
+    select{min-width:260px}
+    .model-note{font-size:12px;color:var(--muted);margin-left:8px;min-width:220px}
     .messages{flex:1;overflow:auto;padding:12px 18px}
     .msg{margin-bottom:12px;max-width:78%;position:relative;word-break:break-word}
     .msg.ai{align-self:flex-start}
@@ -29,19 +37,26 @@
     .bubble{padding:12px;border-radius:12px;background:var(--ai);box-shadow:0 6px 18px rgba(0,0,0,0.25);color:var(--text)}
     .bubble.user{background:var(--user)}
     .meta{font-size:12px;opacity:0.9;margin-bottom:6px;color:var(--muted)}
-    .copy-btn{position:absolute;right:-38px;top:6px;font-size:16px;opacity:0;cursor:pointer;transition:opacity .12s;color:var(--accent);background:transparent;border:none}
+    .copy-btn{position:absolute;right:-44px;top:6px;font-size:16px;opacity:0;color:var(--accent);background:transparent;border:none}
     .msg:hover .copy-btn{opacity:1}
+    .typing{display:flex;gap:6px;align-items:center;padding:10px;border-radius:12px;background:var(--ai);width:fit-content}
+    .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:bounce 1.2s infinite}
+    @keyframes bounce{0%{transform:translateY(0)}50%{transform:translateY(-6px)}100%{transform:translateY(0)}}
     .footer{display:flex;gap:8px;padding:8px;border-top:1px solid var(--border);align-items:center}
     input[type="text"]{flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text);outline:none}
     .send{padding:10px 16px;border-radius:10px;background:linear-gradient(135deg,#d0a0ff,#a080ff);border:none;color:#111;font-weight:700;cursor:pointer}
-    .disclaimer{font-size:12px;color:var(--muted);padding:10px 12px;border-top:1px solid var(--border);margin-top:6px}
-    @media (max-width:520px){
-      .card{height:100vh;padding:8px;border-radius:8px}
+    .disclaimer{font-size:12px;color:var(--muted);padding:10px 12px;border-top:1px solid var(--border)}
+    /* responsive mobile improvements */
+    @media (max-width:600px){
+      body{padding:6px}
+      .card{height:100vh;border-radius:8px;padding:8px}
       .header{flex-direction:column;align-items:flex-start;gap:8px}
-      .controls{width:100%;display:flex;flex-wrap:wrap}
-      .model-note{display:none}
-      .messages{padding:6px}
-      input[type="text"]{font-size:15px}
+      select{min-width:100%}
+      .messages{padding:8px 6px}
+      .msg{max-width:95%}
+      .copy-btn{right:6px}
+      input[type="text"]{padding:14px}
+      .footer{position:sticky;bottom:0;background:transparent;padding:10px}
     }
   </style>
 </head>
@@ -51,19 +66,18 @@
       <div class="logo">
         <div class="logo-icon">AI</div>
         <div>
-          <div style="font-weight:700">INDRESH 2.0</div>
+          <div class="logo-text">INDRESH 2.0</div>
           <div class="tiny">आपका सहायक</div>
         </div>
       </div>
 
-      <div class="controls">
-        <!-- Model select is shown only if env MODEL_SELECT_VISIBLE true.
-             Front-end will hide it if server printed MODEL_SELECT_VISIBLE=false in /api/config (simpler: check window.CONFIG supplied below) -->
+      <div class="controls" aria-hidden="false">
+        <!-- select holds both but we will auto-select Groq Llama; keep select for switching on desktop -->
         <select id="model-select" aria-label="Model selector">
-          <option value="llama_default">Llama 3.1 8B Instant (Groq)</option>
-          <option value="gemini_1_5">Gemini 1.5 Flash (Google)</option>
+          <option value="llama_3_1_8b_instant">Llama 3.1 (Groq) — Default</option>
+          <option value="gemini_2_0">Gemini 2.0 (Google)</option>
         </select>
-        <div id="model-note" class="model-note">Loading model info…</div>
+        <div id="model-note" class="model-note">Llama 3.1 (Groq) selected by default.</div>
 
         <button id="historyBtn" title="History">History</button>
         <button id="copyAllBtn" title="Copy all">Copy All</button>
@@ -91,33 +105,23 @@
   </div>
 
 <script>
-(async function(){
+(function(){
   const messagesEl = document.getElementById('messages');
   const inputEl = document.getElementById('input');
   const sendBtn = document.getElementById('sendBtn');
   const clearBtn = document.getElementById('clearBtn');
-  const copyAllBtn = document.getElementById('copyAllBtn');
-  const modelSel = document.getElementById('model-select');
-  const modelNote = document.getElementById('model-note');
   const themeBtn = document.getElementById('themeBtn');
+  const copyAllBtn = document.getElementById('copyAllBtn');
+  const modelSelect = document.getElementById('model-select');
+  const modelNote = document.getElementById('model-note');
 
-  // config fetched from server (we will expose MODEL_SELECT_VISIBLE via window.CONFIG)
-  let CONFIG = { modelSelectVisible: false, groqDefault: "llama-3.1-8b-instant", geminiModel: "gemini-1.5-flash" };
-  try {
-    // try ping server to read printed values (server logs not accessible here) - but we'll use defaults
-    // If you want remote config, implement /api/config endpoint in server. For now we default.
-  } catch(e){}
+  const convKey = 'conv_v2';
+  let convId = localStorage.getItem(convKey) || Date.now().toString();
+  localStorage.setItem(convKey, convId);
 
-  // hide model select if MODEL_SELECT_VISIBLE false
-  const visible = (CONFIG.modelSelectVisible === true);
-  if (!visible) modelSel.style.display = "none";
-
-  // set default select by env: default = groq
-  modelSel.value = "llama_default";
-  modelNote.textContent = "Llama 3.1 (Groq) selected by default.";
-
-  const convId = localStorage.getItem('conv_v2') || Date.now().toString();
-  localStorage.setItem('conv_v2', convId);
+  // ensure auto-select Llama default (and display note)
+  modelSelect.value = 'llama_3_1_8b_instant';
+  modelNote.textContent = 'Llama 3.1 (Groq) selected by default.';
 
   function addMessage(role, text, isUser=false){
     const wrapper = document.createElement('div'); wrapper.className = 'msg ' + (isUser ? 'user':'ai');
@@ -130,60 +134,67 @@
     messagesEl.appendChild(wrapper); messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  function showTyping(){ const t = document.createElement('div'); t.className='msg ai typing-wrapper'; const typing=document.createElement('div'); typing.className='typing'; typing.innerHTML='<div class="dot"></div><div class="dot"></div><div class="dot"></div>'; t.appendChild(typing); messagesEl.appendChild(t); messagesEl.scrollTop=messagesEl.scrollHeight; return t; }
+  function hideTyping(el){ if(el && el.remove) el.remove(); messagesEl.scrollTop = messagesEl.scrollHeight; }
+
   async function sendToServer(userText){
-    const modelKey = modelSel.value;
-    // map front-end keys to server-expectations
-    let modelParam = "";
-    if (modelKey === "llama_default") modelParam = "llama_default";
-    else modelParam = "gemini_1_5";
-    try {
+    const model = modelSelect.value;
+    try{
       const res = await fetch('/api/chat', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ message: userText, conversation_id: convId, model: modelParam })
+        body: JSON.stringify({ message: userText, conversation_id: convId, model })
       });
       if(!res.ok) {
         const t = await res.text();
-        return { error:true, body: t, status: res.status };
+        return { error:true, status: res.status, body: t };
       }
       const j = await res.json();
       return { error:false, text: j.output?.content || '' };
-    } catch(e) { return { error:true, body: String(e) }; }
+    } catch(e){ return { error:true, body: String(e) }; }
   }
 
-  let sending = false;
+  let sending=false;
   async function handleSend(){
     if(sending) return;
-    const val = inputEl.value.trim(); if(!val) return;
-    addMessage('You', val, true);
+    const t = inputEl.value.trim(); if(!t) return;
+    addMessage('You', t, true);
     inputEl.value=''; sending=true; sendBtn.disabled=true;
-    const typing = document.createElement('div'); typing.className='msg ai'; typing.innerHTML = '<div class="bubble">...</div>'; messagesEl.appendChild(typing); messagesEl.scrollTop = messagesEl.scrollHeight;
-    const r = await sendToServer(val);
-    typing.remove();
-    if (r.error) {
+    const typingEl = showTyping();
+    const r = await sendToServer(t);
+    hideTyping(typingEl);
+    if(r.error){
       addMessage('Indresh 2.0', `Error: ${r.body || r.status || 'server unreachable'}`);
     } else {
-      const text = r.text || 'क्षमा करें — कोई उत्तर नहीं मिला।';
+      const text = r.text || 'क्षमा करें — सर्वर ने कुछ नहीं लौटाया।';
       addMessage('Indresh 2.0', text);
     }
     sending=false; sendBtn.disabled=false;
   }
 
   sendBtn.addEventListener('click', handleSend);
-  inputEl.addEventListener('keydown', e => { if(e.key === 'Enter') handleSend(); });
+  inputEl.addEventListener('keydown', e => { if(e.key==='Enter') handleSend(); });
 
   clearBtn.addEventListener('click', async ()=>{
     if(!confirm('Clear this chat?')) return;
-    try{ await fetch('/api/clear/' + convId, { method:'POST' }); messagesEl.innerHTML = ''; addMessage('Indresh 2.0','Chat cleared.'); }catch(e){ alert('Clear failed'); }
+    try{ await fetch('/api/clear/' + convId, { method:'POST' }); messagesEl.innerHTML=''; convId = Date.now().toString(); localStorage.setItem(convKey, convId); addMessage('Indresh 2.0','Chat cleared.'); }catch(e){ alert('Clear failed'); }
   });
 
   copyAllBtn.addEventListener('click', async ()=>{
-    try{ const res = await fetch('/api/history/' + convId); const j = await res.json(); const text = (j.messages || []).map(m => `${m.created_at||''} [${m.role==='user'?'You':'Indresh 2.0'}]: ${m.content}`).join('\n\n'); await navigator.clipboard.writeText(text); alert('Chat copied'); }catch(e){ alert('Copy failed'); }
+    try{
+      const res = await fetch('/api/history/' + convId); const j = await res.json();
+      const text = (j.messages || []).map(m => `${m.created_at||''} [${m.role==='user'?'You':'Indresh 2.0'}]: ${m.content}`).join('\n\n');
+      await navigator.clipboard.writeText(text);
+      alert('Chat copied to clipboard');
+    }catch(e){ alert('Copy failed'); }
   });
 
   themeBtn.addEventListener('click', ()=>{
-    if(document.body.classList.contains('light')) document.body.classList.remove('light');
-    else document.body.classList.add('light');
+    if(document.body.classList.contains('theme-light')) {
+      document.body.classList.remove('theme-light');
+    } else {
+      document.body.classList.add('theme-light');
+    }
   });
 
 })();
