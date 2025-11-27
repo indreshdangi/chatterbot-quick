@@ -10,53 +10,77 @@
     :root{
       --bg:#0d0d15; --panel:#161622; --user:#2a2a3a; --ai:#1e1e2e;
       --text:#f0f0f0; --muted:rgba(255,255,255,0.6); --accent:#e0a0ff; --border:rgba(255,255,255,0.06);
-      --input-bg: rgba(255,255,255,0.03);
     }
-    /* Light theme - Option1 + soft haze */
-    body.light { --bg:#f4f6f9; --panel: rgba(255,255,255,0.75); --user:#ffffff; --ai:#ffffff; --text:#111; --muted:rgba(0,0,0,0.5); --accent:#7b61ff; --border: rgba(16,16,24,0.06); --input-bg: rgba(255,255,255,0.9); }
-    /* general */
+    /* white blur theme (win11-like) */
+    .theme-light {
+      --bg: linear-gradient(180deg, rgba(250,250,253,1), rgba(244,245,248,1));
+      --panel: rgba(255,255,255,0.7);
+      --ai: rgba(255,255,255,0.85);
+      --user: rgba(250,250,250,0.9);
+      --text:#111; --muted:rgba(0,0,0,0.55); --accent:#7a6bff; --border:rgba(16,16,24,0.06);
+      --glass: rgba(255,255,255,0.45);
+      backdrop-filter: blur(10px);
+    }
+
     *{box-sizing:border-box;margin:0;padding:0}
     html,body{height:100%}
     body{font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:var(--bg); color:var(--text); display:flex; align-items:center; justify-content:center; padding:12px;}
-    .card{width:920px;max-width:98%;background:var(--panel);border-radius:14px;padding:12px;border:1px solid var(--border);display:flex;flex-direction:column;height:86vh;box-shadow:0 14px 40px rgba(0,0,0,0.45);position:relative;overflow:hidden}
-    .header{display:flex;justify-content:space-between;align-items:center;padding:8px 12px}
+
+    .card{width:920px;max-width:98%;background:var(--panel);border-radius:14px;padding:12px;border:1px solid var(--border);display:flex;flex-direction:column;height:86vh;box-shadow:0 12px 40px rgba(0,0,0,0.45);position:relative;overflow:hidden}
+    .header{display:flex;justify-content:space-between;align-items:center;padding:6px 12px}
     .logo{display:flex;gap:10px;align-items:center}
     .logo-icon{width:42px;height:42;border-radius:50%;background:linear-gradient(135deg,#d0a0ff,#a080ff);display:flex;align-items:center;justify-content:center;color:#111;font-weight:800}
     .logo-text{font-weight:700}
     .tiny{font-size:12px;color:var(--muted)}
+
     .controls{display:flex;gap:8px;align-items:center}
     select,button{background:transparent;border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;cursor:pointer}
-    select{min-width:220px}
+    select{min-width:260px}
     .model-note{font-size:12px;color:var(--muted);margin-left:8px;min-width:220px}
+
     .messages{flex:1;overflow:auto;padding:12px 18px;position:relative}
-    .msg{margin-bottom:12px;max-width:84%;position:relative;word-break:break-word}
+    .msg{margin-bottom:12px;max-width:86%;position:relative;word-break:break-word}
     .msg.ai{align-self:flex-start}
     .msg.user{align-self:flex-end;text-align:right}
-    .bubble{padding:14px;border-radius:12px;background:var(--ai);box-shadow:0 6px 18px rgba(0,0,0,0.25);color:var(--text)}
+    .bubble{padding:12px;border-radius:12px;background:var(--ai);box-shadow:0 6px 18px rgba(0,0,0,0.25);color:var(--text)}
     .bubble.user{background:var(--user)}
-    .meta{font-size:12px;opacity:0.95;margin-bottom:6px;color:var(--muted)}
+    .meta{font-size:12px;opacity:0.9;margin-bottom:6px;color:var(--muted)}
+
     .msg .copy-btn{position:absolute;right:-44px;top:6px;font-size:16px;opacity:0;cursor:pointer;transition:opacity .12s;color:var(--accent);background:transparent;border:none}
     .msg:hover .copy-btn{opacity:1}
+
     .typing { display:flex; gap:6px; align-items:center; padding:10px; border-radius:12px; background:var(--ai); width:fit-content; }
+    .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);opacity:0.85; animation: bounce 1.2s infinite;}
+    .dot:nth-child(1){animation-delay:0s} .dot:nth-child(2){animation-delay:.15s} .dot:nth-child(3){animation-delay:.3s}
+    @keyframes bounce{0%{transform:translateY(0)}50%{transform:translateY(-6px)}100%{transform:translateY(0)}}
+
     .footer{display:flex;gap:8px;padding:8px;border-top:1px solid var(--border);align-items:center}
-    input[type="text"]{flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);outline:none}
+    input[type="text"]{flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text);outline:none;min-width:0}
     .send{padding:10px 16px;border-radius:10px;background:linear-gradient(135deg,#d0a0ff,#a080ff);border:none;color:#111;font-weight:700;cursor:pointer}
+
     .disclaimer{font-size:12px;color:var(--muted);padding:10px 12px;border-top:1px solid var(--border);margin-top:6px;text-align:center}
-    /* responsive mobile adjustments */
+
+    @media (max-width:900px){
+      .card{height:92vh;padding:8px}
+      select{min-width:180px}
+    }
     @media (max-width:520px){
-      body{padding:8px}
-      .card{width:100%;height:100vh;border-radius:0;padding:8px}
+      body{padding:6px}
+      .card{width:100%;height:100vh;border-radius:8px;padding:8px}
       .header{flex-direction:column;align-items:flex-start;gap:8px}
       .controls{width:100%;display:flex;flex-wrap:wrap}
       select{width:100%}
-      .messages{padding:8px;overflow-y:auto}
-      .msg .copy-btn{right:6px; top:6px}
-      .footer{position:sticky;bottom:0;background:transparent;padding:12px 6px}
-      input[type="text"]{padding:14px;border-radius:28px}
-      .send{position:relative; right:0}
+      .messages{padding:8px}
+      .footer{position:sticky;bottom:0;background:transparent}
+      .logo-icon{width:38px;height:38px}
     }
-    /* soft rounded note in light mode for haze */
-    body.light .card{backdrop-filter: blur(6px) saturate(120%); -webkit-backdrop-filter: blur(6px) saturate(120%); box-shadow:0 14px 40px rgba(0,0,0,0.06);}
+
+    /* white glass tweak for light theme */
+    body.theme-light{background:linear-gradient(180deg, #f5f6fa, #eef0f5);}
+    body.theme-light .card{background:rgba(255,255,255,0.75); box-shadow:0 10px 40px rgba(20,20,30,0.06); border:1px solid rgba(255,255,255,0.6); backdrop-filter: blur(8px); }
+    body.theme-light .bubble{background:rgba(255,255,255,0.95); color:var(--text); box-shadow: 0 6px 18px rgba(20,20,30,0.06);}
+    body.theme-light input[type="text"]{background:rgba(255,255,255,0.9); color:#111; border:1px solid rgba(200,200,210,0.6);}
+    body.theme-light select, body.theme-light button{color:#111}
   </style>
 </head>
 <body>
@@ -71,10 +95,10 @@
       </div>
 
       <div class="controls" aria-hidden="false">
-        <!-- default selected = llama (auto) - client still shows dropdown but llama is selected -->
+        <!-- Only 2 models: Llama (default) and Gemini (selectable) -->
         <select id="model-select" aria-label="Model selector">
-          <option value="llama_3_1_8b_instant">Llama 3.1 (Groq) — default</option>
-          <option value="gemini_2_0_flash">Gemini 2.0 Flash (Google)</option>
+          <option value="llama_3_1_8b_instant" selected>Llama 3.1 (Groq) — default</option>
+          <option value="gemini">Gemini 2.0 Flash (Google)</option>
         </select>
         <div id="model-note" class="model-note">Llama 3.1 (Groq) selected by default.</div>
 
@@ -113,19 +137,19 @@
   const sendBtn = document.getElementById('sendBtn');
   const clearBtn = document.getElementById('clearBtn');
   const themeBtn = document.getElementById('themeBtn');
-  const historyBtn = document.getElementById('historyBtn');
   const copyAllBtn = document.getElementById('copyAllBtn');
   const modelSelect = document.getElementById('model-select');
   const modelNote = document.getElementById('model-note');
 
-  // conv id
   const convKey = 'conv_v2';
   let convId = localStorage.getItem(convKey) || Date.now().toString();
   localStorage.setItem(convKey, convId);
 
-  function setModelNote(){ 
-    modelNote.textContent = modelSelect.selectedOptions[0].text + (modelSelect.value.startsWith('llama') ? " selected by default." : "");
-  }
+  const MODEL_NOTES = {
+    llama_3_1_8b_instant: "Llama 3.1 (Groq) selected by default.",
+    gemini: "Gemini 2.0 Flash (Google Generative)."
+  };
+  function setModelNote(){ modelNote.textContent = MODEL_NOTES[modelSelect.value] || ""; }
   setModelNote();
 
   function addMessage(who, text, isUser=false){
@@ -139,12 +163,11 @@
     messagesEl.appendChild(wrapper); messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
-  async function fetchHistory(){
-    try{ const res = await fetch(`/api/history/${convId}`); if(!res.ok) return []; const j = await res.json(); return j.messages || []; } catch(e){ return []; }
-  }
+  function showTyping(){ const t = document.createElement('div'); t.className='msg ai typing-wrapper'; const typing=document.createElement('div'); typing.className='typing'; typing.innerHTML='<div class="dot"></div><div class="dot"></div><div class="dot"></div>'; t.appendChild(typing); messagesEl.appendChild(t); messagesEl.scrollTop=messagesEl.scrollHeight; return t; }
+  function hideTyping(el){ if(el && el.remove) el.remove(); messagesEl.scrollTop = messagesEl.scrollHeight; }
 
   async function sendToServer(userText){
-    const model = modelSelect.value;
+    const model = modelSelect.value === 'gemini' ? 'gemini' : 'llama_3_1_8b_instant';
     try{
       const res = await fetch('/api/chat', {
         method:'POST',
@@ -153,10 +176,10 @@
       });
       if(!res.ok){
         const t = await res.text();
-        return { error:true, body:t, status: res.status };
+        return { error:true, status: res.status, body: t };
       }
       const j = await res.json();
-      return { error:false, text: j.output?.content || '' };
+      return { error:false, text: j.output?.content || '', raw: j };
     }catch(e){ return { error:true, body: String(e) }; }
   }
 
@@ -166,26 +189,14 @@
     const t = inputEl.value.trim(); if(!t) return;
     addMessage('You', t, true);
     inputEl.value=''; sending=true; sendBtn.disabled=true;
-    const typing = document.createElement('div'); typing.className='msg ai typing'; typing.innerHTML = '<div class="bubble">...</div>'; messagesEl.appendChild(typing); messagesEl.scrollTop = messagesEl.scrollHeight;
+    const typingEl = showTyping();
     const r = await sendToServer(t);
-    typing.remove();
+    hideTyping(typingEl);
     if(r.error){
       addMessage('Indresh 2.0', `Error: ${r.body || r.status || 'server unreachable'}`);
     } else {
       const text = r.text || 'क्षमा करें — सर्वर ने कुछ नहीं लौटाया।';
-      // streaming-like reveal
-      if(text.length < 1200){
-        let i=0; const chunk = 6;
-        const wrapper = document.createElement('div'); wrapper.className='msg ai';
-        const meta = document.createElement('div'); meta.className='meta'; meta.innerHTML = `<strong>Indresh 2.0</strong> • ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
-        const bubble = document.createElement('div'); bubble.className='bubble';
-        const copyBtn = document.createElement('button'); copyBtn.className='copy-btn'; copyBtn.textContent='📄';
-        wrapper.appendChild(meta); wrapper.appendChild(bubble); wrapper.appendChild(copyBtn);
-        messagesEl.appendChild(wrapper); messagesEl.scrollTop = messagesEl.scrollHeight;
-        const iv = setInterval(()=>{ i = Math.min(text.length, i+chunk); bubble.textContent = text.slice(0,i); copyBtn.dataset.text = bubble.textContent; messagesEl.scrollTop = messagesEl.scrollHeight; if(i>=text.length){ clearInterval(iv); } }, 18);
-      } else {
-        addMessage('Indresh 2.0', text);
-      }
+      addMessage('Indresh 2.0', text);
     }
     sending=false; sendBtn.disabled=false;
   }
@@ -199,20 +210,20 @@
   });
 
   copyAllBtn.addEventListener('click', async ()=>{
-    try{ const res = await fetch('/api/history/' + convId); const j = await res.json(); const text = (j.messages || []).map(m => `${m.created_at||''} [${m.role==='user'?'You':'Indresh 2.0'}]: ${m.content}`).join('\n\n'); await navigator.clipboard.writeText(text); alert('Chat copied to clipboard'); }catch(e){ alert('Copy failed'); }
+    try{
+      const res = await fetch('/api/history/' + convId); const j = await res.json();
+      const text = (j.messages || []).map(m => `${m.created_at||''} [${m.role==='user'?'You':'Indresh 2.0'}]: ${m.content}`).join('\n\n');
+      await navigator.clipboard.writeText(text);
+      alert('Chat copied to clipboard');
+    }catch(e){ alert('Copy failed'); }
   });
 
   themeBtn.addEventListener('click', ()=>{
-    if(document.body.classList.contains('light')){ document.body.classList.remove('light'); localStorage.removeItem('theme'); }
-    else { document.body.classList.add('light'); localStorage.setItem('theme','light'); }
+    if(document.body.classList.contains('theme-light')){ document.body.classList.remove('theme-light'); localStorage.removeItem('theme'); }
+    else { document.body.classList.add('theme-light'); localStorage.setItem('theme','light'); }
   });
 
-  // set initial theme from localStorage (if set)
-  if(localStorage.getItem('theme') === 'light') document.body.classList.add('light');
-
-  modelSelect.addEventListener('change', ()=> setModelNote());
-  setModelNote();
-
+  modelSelect.addEventListener('change', ()=> setModelNote() );
   (async function initLoad(){
     try{
       const res = await fetch('/api/history/' + convId);
