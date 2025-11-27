@@ -1,136 +1,108 @@
+<!-- public/index.html -->
 <!doctype html>
 <html lang="hi">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Indresh 2.0 — Multi-Model</title>
+  <title>Indresh 2.0 — Multi-Model Demo</title>
   <link rel="icon" href="/favicon.ico">
   <style>
     :root{
-      --bg-dark:#0d0d15; --panel-dark:#161622; --user-dark:#2a2a3a; --ai-dark:#1e1e2e;
-      --text-dark:#f0f0f0; --muted-dark:rgba(255,255,255,0.6); --accent:#e0a0ff; --border:rgba(255,255,255,0.06);
-
-      --bg-white: rgba(250,250,252,0.8);
-      --panel-white: rgba(255,255,255,0.6);
-      --text-white:#111;
-      --muted-white: rgba(0,0,0,0.55);
-      --accent-white: #6b5dfc;
+      --bg:#0d0d15; --panel:#161622; --user:#2a2a3a; --ai:#1e1e2e;
+      --text:#f0f0f0; --muted:rgba(255,255,255,0.6); --accent:#e0a0ff; --border:rgba(255,255,255,0.06);
+      --input-bg: rgba(255,255,255,0.03);
     }
-
-    /* base */
+    /* Light theme - Option1 + soft haze */
+    body.light { --bg:#f4f6f9; --panel: rgba(255,255,255,0.75); --user:#ffffff; --ai:#ffffff; --text:#111; --muted:rgba(0,0,0,0.5); --accent:#7b61ff; --border: rgba(16,16,24,0.06); --input-bg: rgba(255,255,255,0.9); }
+    /* general */
     *{box-sizing:border-box;margin:0;padding:0}
     html,body{height:100%}
-    body{
-      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-      background:var(--bg-dark);
-      color:var(--text-dark);
-      display:flex;
-      align-items:flex-start;
-      justify-content:center;
-      padding: env(safe-area-inset-top) 12px 12px 12px; /* safe area for notch */
-    }
-
-    /* card */
-    .card{width:920px;max-width:98%;background:var(--panel-dark);border-radius:14px;padding:12px;border:1px solid var(--border);display:flex;flex-direction:column;height:88vh;box-shadow:0 10px 30px rgba(0,0,0,0.35);position:relative;overflow:hidden}
-    .header{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;gap:8px;flex-wrap:wrap}
-    .logo{display:flex;gap:10px;align-items:center;min-width:180px}
+    body{font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:var(--bg); color:var(--text); display:flex; align-items:center; justify-content:center; padding:12px;}
+    .card{width:920px;max-width:98%;background:var(--panel);border-radius:14px;padding:12px;border:1px solid var(--border);display:flex;flex-direction:column;height:86vh;box-shadow:0 14px 40px rgba(0,0,0,0.45);position:relative;overflow:hidden}
+    .header{display:flex;justify-content:space-between;align-items:center;padding:8px 12px}
+    .logo{display:flex;gap:10px;align-items:center}
     .logo-icon{width:42px;height:42;border-radius:50%;background:linear-gradient(135deg,#d0a0ff,#a080ff);display:flex;align-items:center;justify-content:center;color:#111;font-weight:800}
     .logo-text{font-weight:700}
-    .tiny{font-size:12px;color:var(--muted-dark)}
-
-    .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    select,button{background:transparent;border:1px solid var(--border);color:var(--text-dark);padding:8px 10px;border-radius:8px;cursor:pointer}
+    .tiny{font-size:12px;color:var(--muted)}
+    .controls{display:flex;gap:8px;align-items:center}
+    select,button{background:transparent;border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;cursor:pointer}
     select{min-width:220px}
-    .model-note{font-size:12px;color:var(--muted-dark);margin-left:8px;min-width:220px}
-
-    .messages{flex:1;overflow:auto;padding:12px 18px;position:relative;padding-bottom:140px} /* bottom padding for fixed footer */
-    .msg{margin-bottom:12px;max-width:78%;position:relative;word-break:break-word}
+    .model-note{font-size:12px;color:var(--muted);margin-left:8px;min-width:220px}
+    .messages{flex:1;overflow:auto;padding:12px 18px;position:relative}
+    .msg{margin-bottom:12px;max-width:84%;position:relative;word-break:break-word}
     .msg.ai{align-self:flex-start}
     .msg.user{align-self:flex-end;text-align:right}
-    .bubble{padding:12px;border-radius:12px;background:var(--ai-dark);box-shadow:0 6px 18px rgba(0,0,0,0.25);color:var(--text-dark)}
-    .bubble.user{background:var(--user-dark)}
-    .meta{font-size:12px;opacity:0.95;margin-bottom:6px;color:var(--muted-dark)}
-
-    .msg .copy-btn{position:absolute;right:-40px;top:6px;font-size:16px;opacity:0;cursor:pointer;transition:opacity .12s;color:var(--accent);background:transparent;border:none}
+    .bubble{padding:14px;border-radius:12px;background:var(--ai);box-shadow:0 6px 18px rgba(0,0,0,0.25);color:var(--text)}
+    .bubble.user{background:var(--user)}
+    .meta{font-size:12px;opacity:0.95;margin-bottom:6px;color:var(--muted)}
+    .msg .copy-btn{position:absolute;right:-44px;top:6px;font-size:16px;opacity:0;cursor:pointer;transition:opacity .12s;color:var(--accent);background:transparent;border:none}
     .msg:hover .copy-btn{opacity:1}
-
-    /* footer fixed at bottom of card */
-    .footer{position:absolute;left:12px;right:12px;bottom:12px;display:flex;gap:8px;padding:8px;border-radius:12px;align-items:center;background:transparent}
-    input[type="text"]{flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text-dark);outline:none}
-    .send{padding:10px 16px;border-radius:10px;background:linear-gradient(135deg,#d0a0ff,#a080ff);border:none;color:#111;font-weight:700;cursor:pointer;min-width:72px}
-
-    .disclaimer{font-size:12px;color:var(--muted-dark);padding:8px 12px;margin-top:6px;text-align:center}
-
-    /* white theme (blurred, Win11-like) */
-    .theme-white .card{
-      background: linear-gradient(180deg, rgba(255,255,255,0.75), rgba(245,245,247,0.65));
-      backdrop-filter: blur(10px) saturate(120%);
-      -webkit-backdrop-filter: blur(10px) saturate(120%);
-      border:1px solid rgba(255,255,255,0.6);
-      color:var(--text-white);
-    }
-    .theme-white body{ color:var(--text-white); }
-    .theme-white .logo-text, .theme-white .tiny{ color:var(--muted-white) }
-    .theme-white .bubble{ background: rgba(255,255,255,0.95); color: var(--text-white); box-shadow: 0 6px 18px rgba(20,20,20,0.06); }
-    .theme-white .bubble.user{ background: rgba(245,245,250,0.95); }
-    .theme-white select, .theme-white button{ color:var(--text-white); border:1px solid rgba(0,0,0,0.06); }
-
+    .typing { display:flex; gap:6px; align-items:center; padding:10px; border-radius:12px; background:var(--ai); width:fit-content; }
+    .footer{display:flex;gap:8px;padding:8px;border-top:1px solid var(--border);align-items:center}
+    input[type="text"]{flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);outline:none}
+    .send{padding:10px 16px;border-radius:10px;background:linear-gradient(135deg,#d0a0ff,#a080ff);border:none;color:#111;font-weight:700;cursor:pointer}
+    .disclaimer{font-size:12px;color:var(--muted);padding:10px 12px;border-top:1px solid var(--border);margin-top:6px;text-align:center}
     /* responsive mobile adjustments */
-    @media (max-width:720px){
-      body{padding: env(safe-area-inset-top) 8px 8px 8px}
-      .card{width:100%;height:100vh;border-radius:0;padding:10px}
-      .header{padding-top:8px;padding-bottom:8px}
-      .messages{padding:8px 12px 180px 12px} /* more bottom space for keyboard */
-      .footer{left:8px;right:8px;bottom:12px}
-      .model-note{display:block;width:100%}
+    @media (max-width:520px){
+      body{padding:8px}
+      .card{width:100%;height:100vh;border-radius:0;padding:8px}
+      .header{flex-direction:column;align-items:flex-start;gap:8px}
+      .controls{width:100%;display:flex;flex-wrap:wrap}
+      select{width:100%}
+      .messages{padding:8px;overflow-y:auto}
+      .msg .copy-btn{right:6px; top:6px}
+      .footer{position:sticky;bottom:0;background:transparent;padding:12px 6px}
+      input[type="text"]{padding:14px;border-radius:28px}
+      .send{position:relative; right:0}
     }
+    /* soft rounded note in light mode for haze */
+    body.light .card{backdrop-filter: blur(6px) saturate(120%); -webkit-backdrop-filter: blur(6px) saturate(120%); box-shadow:0 14px 40px rgba(0,0,0,0.06);}
   </style>
 </head>
 <body>
-  <div id="root" class="">
-    <div class="card theme-dark" id="app" role="application" aria-label="Indresh 2.0 chat">
-      <div class="header" id="header">
-        <div class="logo">
-          <div class="logo-icon">AI</div>
-          <div>
-            <div class="logo-text">INDRESH 2.0</div>
-            <div class="tiny">आपका सहायक</div>
-          </div>
-        </div>
-
-        <div class="controls" aria-hidden="false">
-          <select id="model-select" aria-label="Model selector">
-            <option value="llama_3_1_8b_instant">Llama 3.1 (Groq)</option>
-            <option value="gemini_2_0_flash">Gemini-2.0-flash (Google)</option>
-          </select>
-          <div id="model-note" class="model-note">Llama 3.1 (Groq) selected by default.</div>
-
-          <button id="historyBtn" title="History">History</button>
-          <button id="copyAllBtn" title="Copy all">Copy All</button>
-          <button id="clearBtn" title="Clear">Clear</button>
-
-          <div style="display:flex;gap:8px;align-items:center">
-            <button id="themeBtn" title="Theme">Theme</button>
-          </div>
+  <div class="card" id="app" role="application" aria-label="Indresh 2.0 chat">
+    <div class="header">
+      <div class="logo">
+        <div class="logo-icon">AI</div>
+        <div>
+          <div class="logo-text">INDRESH 2.0</div>
+          <div class="tiny">आपका सहायक</div>
         </div>
       </div>
 
-      <div class="messages" id="messages" role="log" aria-live="polite">
-        <div class="msg ai">
-          <div class="meta"><strong>Indresh 2.0</strong> • Just now</div>
-          <div class="bubble">नमस्ते! मैं Indresh 2.0 हूँ — आपका सहायक।</div>
-          <button class="copy-btn" data-text="नमस्ते! मैं Indresh 2.0 हूँ — आपका सहायक।">📄</button>
+      <div class="controls" aria-hidden="false">
+        <!-- default selected = llama (auto) - client still shows dropdown but llama is selected -->
+        <select id="model-select" aria-label="Model selector">
+          <option value="llama_3_1_8b_instant">Llama 3.1 (Groq) — default</option>
+          <option value="gemini_2_0_flash">Gemini 2.0 Flash (Google)</option>
+        </select>
+        <div id="model-note" class="model-note">Llama 3.1 (Groq) selected by default.</div>
+
+        <button id="historyBtn" title="History">History</button>
+        <button id="copyAllBtn" title="Copy all">Copy All</button>
+        <button id="clearBtn" title="Clear">Clear</button>
+
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="themeBtn" title="Theme">Theme</button>
         </div>
       </div>
+    </div>
 
-      <div class="footer" id="footer">
-        <input id="input" type="text" placeholder="Message Indresh 2.0..." aria-label="Message input">
-        <button class="send" id="sendBtn" type="button">Send</button>
+    <div class="messages" id="messages" role="log" aria-live="polite">
+      <div class="msg ai">
+        <div class="meta"><strong>Indresh 2.0</strong> • Just now</div>
+        <div class="bubble">नमस्ते! मैं Indresh 2.0 हूँ — आपका सहायक। आप कैसे सहायता चाहते हैं?</div>
+        <button class="copy-btn" data-text="नमस्ते! मैं Indresh 2.0 हूँ — आपका सहायक।">📄</button>
       </div>
+    </div>
 
-      <div class="disclaimer" id="disclaimer">
-        Note: AI information may be incorrect. Do not fully rely on it for important decisions. We are not responsible for outcomes.
-      </div>
+    <div class="footer">
+      <input id="input" type="text" placeholder="Message Indresh 2.0..." aria-label="Message input">
+      <button class="send" id="sendBtn" type="button">Send</button>
+    </div>
+
+    <div class="disclaimer">
+      Note: AI information may be incorrect. Do not fully rely on it for important decisions. We are not responsible for outcomes.
     </div>
   </div>
 
@@ -141,22 +113,23 @@
   const sendBtn = document.getElementById('sendBtn');
   const clearBtn = document.getElementById('clearBtn');
   const themeBtn = document.getElementById('themeBtn');
+  const historyBtn = document.getElementById('historyBtn');
   const copyAllBtn = document.getElementById('copyAllBtn');
   const modelSelect = document.getElementById('model-select');
   const modelNote = document.getElementById('model-note');
-  const root = document.getElementById('root');
 
+  // conv id
   const convKey = 'conv_v2';
   let convId = localStorage.getItem(convKey) || Date.now().toString();
   localStorage.setItem(convKey, convId);
 
-  // default select Llama
-  modelSelect.value = 'llama_3_1_8b_instant';
-  function setModelNote(){ modelNote.textContent = modelSelect.value === 'llama_3_1_8b_instant' ? "Llama 3.1 (Groq) selected by default." : "Gemini-2.0-flash (Google) selected."; }
+  function setModelNote(){ 
+    modelNote.textContent = modelSelect.selectedOptions[0].text + (modelSelect.value.startsWith('llama') ? " selected by default." : "");
+  }
   setModelNote();
 
   function addMessage(who, text, isUser=false){
-    const wrapper = document.createElement('div'); wrapper.className = 'msg ' + (isUser ? 'user' : 'ai');
+    const wrapper = document.createElement('div'); wrapper.className = 'msg ' + (isUser ? 'user':'ai');
     const meta = document.createElement('div'); meta.className='meta';
     meta.innerHTML = `<strong>${isUser ? 'You' : 'Indresh 2.0'}</strong> • ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
     const bubble = document.createElement('div'); bubble.className='bubble' + (isUser? ' user':'' ); bubble.textContent = text || '';
@@ -166,9 +139,12 @@
     messagesEl.appendChild(wrapper); messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  async function fetchHistory(){
+    try{ const res = await fetch(`/api/history/${convId}`); if(!res.ok) return []; const j = await res.json(); return j.messages || []; } catch(e){ return []; }
+  }
+
   async function sendToServer(userText){
-    const mapping = { 'gemini_2_0_flash':'gemini_2_0', 'llama_3_1_8b_instant':'llama_3_1_8b_instant' };
-    const model = modelSelect.value === 'gemini_2_0_flash' ? 'gemini_2_0' : 'llama_3_1_8b_instant';
+    const model = modelSelect.value;
     try{
       const res = await fetch('/api/chat', {
         method:'POST',
@@ -177,7 +153,7 @@
       });
       if(!res.ok){
         const t = await res.text();
-        return { error:true, status: res.status, body: t };
+        return { error:true, body:t, status: res.status };
       }
       const j = await res.json();
       return { error:false, text: j.output?.content || '' };
@@ -190,14 +166,26 @@
     const t = inputEl.value.trim(); if(!t) return;
     addMessage('You', t, true);
     inputEl.value=''; sending=true; sendBtn.disabled=true;
-    const typing = document.createElement('div'); typing.className='msg ai'; typing.innerHTML='<div class="bubble">...</div>'; messagesEl.appendChild(typing); messagesEl.scrollTop = messagesEl.scrollHeight;
+    const typing = document.createElement('div'); typing.className='msg ai typing'; typing.innerHTML = '<div class="bubble">...</div>'; messagesEl.appendChild(typing); messagesEl.scrollTop = messagesEl.scrollHeight;
     const r = await sendToServer(t);
     typing.remove();
     if(r.error){
       addMessage('Indresh 2.0', `Error: ${r.body || r.status || 'server unreachable'}`);
     } else {
       const text = r.text || 'क्षमा करें — सर्वर ने कुछ नहीं लौटाया।';
-      addMessage('Indresh 2.0', text);
+      // streaming-like reveal
+      if(text.length < 1200){
+        let i=0; const chunk = 6;
+        const wrapper = document.createElement('div'); wrapper.className='msg ai';
+        const meta = document.createElement('div'); meta.className='meta'; meta.innerHTML = `<strong>Indresh 2.0</strong> • ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+        const bubble = document.createElement('div'); bubble.className='bubble';
+        const copyBtn = document.createElement('button'); copyBtn.className='copy-btn'; copyBtn.textContent='📄';
+        wrapper.appendChild(meta); wrapper.appendChild(bubble); wrapper.appendChild(copyBtn);
+        messagesEl.appendChild(wrapper); messagesEl.scrollTop = messagesEl.scrollHeight;
+        const iv = setInterval(()=>{ i = Math.min(text.length, i+chunk); bubble.textContent = text.slice(0,i); copyBtn.dataset.text = bubble.textContent; messagesEl.scrollTop = messagesEl.scrollHeight; if(i>=text.length){ clearInterval(iv); } }, 18);
+      } else {
+        addMessage('Indresh 2.0', text);
+      }
     }
     sending=false; sendBtn.disabled=false;
   }
@@ -205,18 +193,33 @@
   sendBtn.addEventListener('click', handleSend);
   inputEl.addEventListener('keydown', e => { if(e.key==='Enter') handleSend(); });
 
-  clearBtn.addEventListener('click', async ()=>{ if(!confirm('Clear this chat?')) return; try{ await fetch('/api/clear/' + convId, { method:'POST' }); messagesEl.innerHTML=''; convId = Date.now().toString(); localStorage.setItem(convKey, convId); addMessage('Indresh 2.0','Chat cleared. नमस्ते — कैसे सहायता करूँ?'); }catch(e){ alert('Clear failed'); } });
+  clearBtn.addEventListener('click', async ()=>{
+    if(!confirm('Clear this chat?')) return;
+    try{ await fetch('/api/clear/' + convId, { method:'POST' }); messagesEl.innerHTML=''; convId = Date.now().toString(); localStorage.setItem(convKey, convId); addMessage('Indresh 2.0','Chat cleared. नमस्ते — कैसे सहायता करूँ?'); }catch(e){ alert('Clear failed'); }
+  });
 
-  copyAllBtn.addEventListener('click', async ()=>{ try{ const res = await fetch('/api/history/' + convId); const j = await res.json(); const text = (j.messages || []).map(m => `${m.created_at||''} [${m.role==='user'?'You':'Indresh 2.0'}]: ${m.content}`).join('\n\n'); await navigator.clipboard.writeText(text); alert('Chat copied to clipboard'); }catch(e){ alert('Copy failed'); } });
+  copyAllBtn.addEventListener('click', async ()=>{
+    try{ const res = await fetch('/api/history/' + convId); const j = await res.json(); const text = (j.messages || []).map(m => `${m.created_at||''} [${m.role==='user'?'You':'Indresh 2.0'}]: ${m.content}`).join('\n\n'); await navigator.clipboard.writeText(text); alert('Chat copied to clipboard'); }catch(e){ alert('Copy failed'); }
+  });
 
-  themeBtn.addEventListener('click', ()=>{ const card = document.querySelector('.card'); if(card.classList.contains('theme-white')){ card.classList.remove('theme-white'); document.body.style.background = "var(--bg-dark)"; card.classList.add('theme-dark'); localStorage.setItem('theme','dark'); } else { card.classList.remove('theme-dark'); card.classList.add('theme-white'); document.body.style.background = "var(--bg-white)"; localStorage.setItem('theme','white'); } });
+  themeBtn.addEventListener('click', ()=>{
+    if(document.body.classList.contains('light')){ document.body.classList.remove('light'); localStorage.removeItem('theme'); }
+    else { document.body.classList.add('light'); localStorage.setItem('theme','light'); }
+  });
+
+  // set initial theme from localStorage (if set)
+  if(localStorage.getItem('theme') === 'light') document.body.classList.add('light');
 
   modelSelect.addEventListener('change', ()=> setModelNote());
+  setModelNote();
 
-  (async function initLoad(){ try{ const res = await fetch('/api/history/' + convId); if(res.ok){ const j = await res.json(); messagesEl.innerHTML = ''; for(const m of j.messages) addMessage(m.role === 'user' ? 'You' : 'Indresh 2.0', m.content, m.role==='user'); } }catch(e){} inputEl.focus(); })();
-
-  // small layout safety: ensure header visible on mobile (scroll to top)
-  window.addEventListener('resize', ()=> { if(window.innerWidth < 720) window.scrollTo(0,0); });
+  (async function initLoad(){
+    try{
+      const res = await fetch('/api/history/' + convId);
+      if(res.ok){ const j = await res.json(); messagesEl.innerHTML = ''; for(const m of j.messages) addMessage(m.role === 'user' ? 'You' : 'Indresh 2.0', m.content, m.role==='user'); }
+    }catch(e){}
+    inputEl.focus();
+  })();
 
 })();
 </script>
