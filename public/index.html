@@ -2,232 +2,367 @@
 <html lang="hi">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
   <title>Indresh 2.0 — Multi-Model AI</title>
+  <meta name="description" content="INDRESH 2.0 — Chat with Llama 3.1 or Gemini 2.0 Flash" />
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 
   <style>
     :root{
-      --bg:#0d0d15; --panel:#161622; --user:#2a2a3a; --ai:#1e1e2e;
-      --text:#f0f0f0; --muted:rgba(255,255,255,0.6); --accent:#e0a0ff; --border:rgba(255,255,255,0.06);
-    }
-    .theme-purple{ --bg:#0b0820; --panel:#120922; --user:#2e153b; --ai:#23102f; --accent:#f0a0ff; }
-    .theme-light{ --bg:#f6f7fb; --panel:#ffffff; --user:#f1f1f4; --ai:#ffffff; --text:#111; --muted:rgba(0,0,0,0.6); --accent:#6b5dfc; --border:#e1e1e1; }
+      --bg-dark: #0d0f18; --panel-dark: #0f1724; --user-dark:#0b1220; --ai-dark:#0b1228;
+      --text-light: #e6eef8; --muted-light: #9aa6b2; --accent: #2563eb;
+      --glass: rgba(255,255,255,0.04);
 
-    body{
-      background:var(--bg); color:var(--text);
-      font-family:Inter, system-ui, sans-serif;
-      margin:0; padding:20px;
-      display:flex; justify-content:center;
+      --bg-light: #f5f7fb; --panel-light: rgba(255,255,255,0.8); --text-dark: #0f1724; --muted-dark: #556173;
     }
 
-    .card{
-      width:900px; max-width:100%; height:85vh;
-      background:var(--panel); border-radius:12px;
-      border:1px solid var(--border);
-      display:flex; flex-direction:column;
-      box-shadow:0 5px 20px rgba(0,0,0,0.4);
-      overflow:hidden;
+    /* Base */
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+    body{background:var(--bg-dark); color:var(--text-light); padding:10px; display:flex; justify-content:center; align-items:stretch; min-height:100vh;}
+
+    /* container */
+    .app {
+      width:100%;
+      max-width:980px;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      margin:0 auto;
     }
 
-    .header{padding:10px 18px; display:flex; justify-content:space-between; align-items:center;}
-    .logo{display:flex; gap:10px; align-items:center;}
-    .logo-icon{
-      width:42px;height:42px;border-radius:50%;
-      background:linear-gradient(135deg,#d0a0ff,#a080ff);
-      display:flex;align-items:center;justify-content:center;
-      color:#111;font-weight:800;
+    /* topbar */
+    .topbar {
+      display:flex; align-items:center; gap:12px; justify-content:space-between;
+    }
+    .brand { display:flex; gap:10px; align-items:center; }
+    .logo {
+      width:44px; height:44px; border-radius:10px;
+      display:flex; align-items:center; justify-content:center; font-weight:700;
+      background:linear-gradient(135deg,#dbeafe,#60a5fa); color:#07102a;
+    }
+    .title { font-weight:700; font-size:1.05rem; }
+    .subtitle { font-size:0.85rem; color:var(--muted-light) }
+
+    .controls { display:flex; gap:8px; align-items:center; }
+
+    select.model {
+      padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.06);
+      background:transparent; color:inherit; min-width:190px;
+    }
+    button.small { padding:8px 10px; border-radius:8px; border:0; background:transparent; color:inherit; cursor:pointer; }
+    button.ghost { border:1px solid rgba(255,255,255,0.06) }
+
+    /* chat card */
+    .card {
+      flex:1; background:var(--panel-dark); border-radius:14px;
+      padding:12px; display:flex; flex-direction:column; box-shadow:0 10px 30px rgba(2,6,23,0.6);
+      backdrop-filter: blur(6px); border:1px solid rgba(255,255,255,0.02);
     }
 
-    select,button{
-      padding:8px 10px;border-radius:8px;
-      background:transparent;border:1px solid var(--border);
-      color:var(--text);cursor:pointer;
+    .messages {
+      flex:1; overflow:auto; padding:8px; display:flex; flex-direction:column; gap:10px;
     }
 
-    .messages{
-      flex:1; padding:15px; overflow:auto;
+    .message {
+      max-width:92%; word-break:break-word; white-space:pre-wrap; position:relative;
+      display:inline-block;
+    }
+    .message.user { align-self:flex-end; text-align:right; }
+    .bubble {
+      padding:10px 12px; border-radius:10px; box-shadow:0 6px 18px rgba(2,6,23,0.6);
+      line-height:1.35; font-size:15px;
+    }
+    .bubble.user { background:linear-gradient(90deg,#60a5fa,#3b82f6); color:#07102a; border-bottom-right-radius:4px; }
+    .bubble.assistant { background:var(--glass); color:var(--text-light); border-bottom-left-radius:4px; }
+
+    .meta { font-size:12px; color:var(--muted-light); margin-top:6px; display:flex; gap:8px; align-items:center; }
+
+    /* copy button */
+    .copyBtn {
+      margin-left:8px; padding:6px 8px; font-size:13px; border-radius:8px; border:0; background:transparent; color:var(--accent); cursor:pointer;
     }
 
-    .msg{margin-bottom:14px; max-width:75%;}
-    .msg.user{margin-left:auto; text-align:right;}
-    .bubble{
-      padding:10px 12px; background:var(--ai);
-      border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.3);
-      white-space:pre-wrap;
+    /* composer */
+    .composer { display:flex; gap:8px; align-items:end; margin-top:8px; }
+    textarea.input {
+      flex:1; min-height:48px; max-height:160px; resize:none; padding:10px 12px; border-radius:10px;
+      border:1px solid rgba(255,255,255,0.04); background:transparent; color:inherit; font-size:15px;
     }
-    .bubble.user{background:var(--user);}
+    .sendBtn { padding:10px 14px; border-radius:10px; border:0; background:var(--accent); color:white; font-weight:600; cursor:pointer; }
 
-    .meta{font-size:12px;color:var(--muted); margin-bottom:4px;}
-    
-    .copy-btn{
-      position:absolute; right:-30px; top:5px; opacity:0;
-      cursor:pointer; border:none; background:transparent;
-      color:var(--accent); font-size:16px;
-    }
-    .msg:hover .copy-btn{opacity:1;}
+    /* utility row */
+    .util { display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:8px; }
+    .muted { color:var(--muted-light); font-size:13px; }
 
-    .typing{display:flex; gap:6px; margin-top:5px;}
-    .typing .dot{
-      width:8px;height:8px;border-radius:50%;
-      background:var(--accent); animation:bounce 1.1s infinite;
-    }
-    @keyframes bounce{
-      0%,100%{transform:translateY(0)}
-      50%{transform:translateY(-6px)}
+    /* disclaimer */
+    .disclaimer { font-size:13px; color:var(--muted-light); text-align:center; margin-top:8px; padding:6px; }
+
+    /* mobile adjustments */
+    @media (max-width:720px){
+      .card{ padding:10px; border-radius:10px; }
+      .title{ font-size:1rem }
+      select.model { min-width:140px; font-size:14px; }
+      .bubble{ font-size:15px; }
+      .logo{ width:40px; height:40px; }
     }
 
-    .footer{
-      display:flex; gap:10px; padding:12px;
-      border-top:1px solid var(--border);
-    }
-    input{
-      flex:1;padding:12px;border-radius:10px;
-      border:1px solid var(--border); background:transparent;
-      color:var(--text); outline:none;
-    }
+    /* Light theme overrides (Windows 11 like glass) */
+    .light body { background:var(--bg-light) }
+    .light .card { background:var(--panel-light); color:var(--text-dark); border:1px solid rgba(0,0,0,0.06); box-shadow:none; }
+    .light .bubble.assistant { background: rgba(255,255,255,0.92); color:var(--text-dark) }
+    .light .bubble.user { background: linear-gradient(90deg,#dbeafe,#bfdbfe); color:var(--text-dark) }
+    .light .meta { color:var(--muted-dark) }
+    .light .muted { color:var(--muted-dark) }
+    .light select.model { border:1px solid rgba(0,0,0,0.06); background:transparent; color:var(--text-dark); }
 
-    .send{
-      padding:12px 20px; border-radius:10px;
-      background:linear-gradient(135deg,#d0a0ff,#a080ff);
-      border:none; color:#111; font-weight:700;
-      cursor:pointer;
-    }
-
-    .sidebar{
-      position:fixed; right:20px; top:20px;
-      width:350px; height:85vh;
-      background:var(--panel); border:1px solid var(--border);
-      border-radius:12px; display:none; padding:15px;
-      overflow:auto; box-shadow:0 5px 25px rgba(0,0,0,0.5);
-    }
-    .sidebar.open{display:block;}
+    /* small helpers */
+    .center { text-align:center }
   </style>
 </head>
 
 <body>
-  <div class="card" id="app">
-
-    <div class="header">
-      <div class="logo">
-        <div class="logo-icon">AI</div>
+  <div class="app" id="appRoot">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo">AI</div>
         <div>
-          <div style="font-weight:700;font-size:18px;">INDRESH 2.0</div>
-          <div style="font-size:11px;color:var(--muted);">आपका सहायक</div>
+          <div class="title">INDRESH 2.0</div>
+          <div class="subtitle">आपका सहायक — choose model & chat</div>
         </div>
       </div>
 
-      <div style="display:flex;gap:10px;align-items:center;">
-        <select id="model-select">
-          <option value="llama_3_1_8b">Llama 3.1 8B Instant (Default)</option>
-          <option value="llama_3_3_70b">Llama 3.3 70B Versatile (Groq)</option>
-          <option value="gemini_flash_lite">Gemini 2.5 Flash Lite</option>
+      <div class="controls">
+        <select id="modelSelect" class="model">
+          <option value="llama_3_1_8b">Llama 3.1 (8B) — Groq</option>
+          <option value="gemini_flash">Gemini 2.0 Flash</option>
         </select>
 
-        <button id="historyBtn">History</button>
-        <button id="clearBtn">Clear</button>
-        <button id="themeBtn">Theme</button>
+        <button id="clearChat" class="small ghost" title="Clear chat">Clear</button>
+        <button id="themeToggle" class="small" title="Toggle theme">Light</button>
       </div>
     </div>
 
-    <div class="messages" id="messages">
-      <div class="msg ai">
-        <div class="meta">Indresh 2.0 • अभी</div>
-        <div class="bubble">नमस्ते! मैं Indresh 2.0 हूँ। बताइए आज क्या मदद चाहिए?</div>
+    <div class="card" role="main" aria-live="polite">
+      <div id="messages" class="messages" aria-live="polite" aria-atomic="false">
+        <!-- initial assistant welcome -->
+        <div class="message assistant">
+          <div class="bubble assistant">नमस्ते! मैं Indresh 2.0 हूँ — किस तरह मदद चाहिए?</div>
+          <div class="meta"><span class="muted">Indresh 2.0</span> • <small class="muted">अब</small>
+            <button class="copyBtn" data-text="नमस्ते! मैं Indresh 2.0 हूँ — किस तरह मदद चाहिए?">Copy</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="composer" style="margin-top:10px">
+        <textarea id="inputBox" class="input" placeholder="Type message — press Enter to send, Shift+Enter for newline"></textarea>
+        <button id="sendBtn" class="sendBtn">Send</button>
+      </div>
+
+      <div class="util">
+        <div class="muted">Tip: Use model selector to switch models. Responses may be inaccurate — verify important info.</div>
+        <div id="status" class="muted"></div>
+      </div>
+
+      <div class="disclaimer center">
+        <strong>Disclaimer:</strong> AI-generated information may be inaccurate. Do not rely on it fully; we are not responsible for consequences.
       </div>
     </div>
-
-    <div class="footer">
-      <input id="input" placeholder="Message Indresh 2.0..." />
-      <button id="sendBtn" class="send">Send</button>
-    </div>
-  </div>
-
-  <div class="sidebar" id="sidebar">
-    <h3>Chat History</h3>
-    <div id="historyList" style="margin-top:10px;font-size:14px;color:var(--text);"></div>
-    <br>
-    <button id="closeSidebar">Close</button>
   </div>
 
 <script>
 (function(){
+  // CONFIG: do not commit secrets here - keep in Render env.
+  const API = '/api/chat';
+  const SERVER_API_KEY = ''; // leave blank if you want server to accept without header; or set in client temporarily for demo
 
-  const messagesEl = document.getElementById("messages");
-  const inputEl = document.getElementById("input");
-  const sendBtn = document.getElementById("sendBtn");
-  const sidebar = document.getElementById("sidebar");
-  const historyBtn = document.getElementById("historyBtn");
-  const closeSidebar = document.getElementById("closeSidebar");
+  const messagesEl = document.getElementById('messages');
+  const inputBox = document.getElementById('inputBox');
+  const sendBtn = document.getElementById('sendBtn');
+  const modelSelect = document.getElementById('modelSelect');
+  const themeToggle = document.getElementById('themeToggle');
+  const clearBtn = document.getElementById('clearChat');
+  const statusEl = document.getElementById('status');
+  const appRoot = document.getElementById('appRoot');
 
-  let convId = localStorage.getItem("conv_v3") || Date.now().toString();
-  localStorage.setItem("conv_v3", convId);
+  // conversation id (persist client-side)
+  let convId = localStorage.getItem('ind_conv') || (Date.now().toString());
+  localStorage.setItem('ind_conv', convId);
 
-  function addMessage(role, text){
-    const box = document.createElement("div");
-    box.className = "msg " + (role==="user" ? "user" : "ai");
+  let sending = false;
 
-    const meta = document.createElement("div");
-    meta.className = "meta";
-    meta.textContent = (role==="user"?"You":"Indresh 2.0") + " • " + new Date().toLocaleTimeString();
-
-    const bubble = document.createElement("div");
-    bubble.className = "bubble";
-    bubble.textContent = text;
-
-    box.appendChild(meta);
-    box.appendChild(bubble);
-    messagesEl.appendChild(box);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
+  function nowTime(){
+    const d = new Date();
+    return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
   }
 
-  function showTyping(){
-    const d = document.createElement("div");
-    d.className = "msg ai";
-    d.innerHTML = `<div class="bubble"><div class="typing">
-      <div class='dot'></div><div class='dot'></div><div class='dot'></div>
-    </div></div>`;
+  // append message helper
+  function appendMessage(role, text, copyText){
+    const wrapper = document.createElement('div');
+    wrapper.className = 'message ' + (role === 'user' ? 'user' : 'assistant');
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble ' + (role === 'user' ? 'user' : 'assistant');
+    bubble.innerText = text;
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const who = document.createElement('span');
+    who.className = 'muted';
+    who.innerText = role === 'user' ? 'You' : 'Indresh 2.0';
+
+    const ts = document.createElement('small');
+    ts.className = 'muted';
+    ts.innerText = ' • ' + nowTime();
+
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'copyBtn';
+    copyBtn.type = 'button';
+    copyBtn.innerText = 'Copy';
+    copyBtn.addEventListener('click', ()=> {
+      navigator.clipboard && navigator.clipboard.writeText(copyText || text).then(()=>{
+        copyBtn.innerText = 'Copied';
+        setTimeout(()=> copyBtn.innerText = 'Copy', 1200);
+      }).catch(()=> {
+        // fallback
+        alert('Copy failed. Long-press to select on mobile.');
+      });
+    });
+
+    meta.appendChild(who);
+    meta.appendChild(ts);
+    meta.appendChild(copyBtn);
+
+    wrapper.appendChild(bubble);
+    wrapper.appendChild(meta);
+    messagesEl.appendChild(wrapper);
+    scrollToBottom();
+  }
+
+  function scrollToBottom(){
+    messagesEl.scrollTop = messagesEl.scrollHeight + 200;
+  }
+
+  function setStatus(t){
+    statusEl.innerText = t || '';
+    if(t) setTimeout(()=> { if(statusEl.innerText === t) statusEl.innerText = ''; }, 4000);
+  }
+
+  // show typing indicator
+  function showTyping() {
+    const d = document.createElement('div');
+    d.className = 'message assistant typing-indicator';
+    d.innerHTML = '<div class="bubble assistant"><div style="display:flex;gap:6px"><div style="width:8px;height:8px;border-radius:50%;background:var(--accent);animation:typing 1s infinite;"></div><div style="width:8px;height:8px;border-radius:50%;background:var(--accent);animation:typing 1s .2s infinite;"></div><div style="width:8px;height:8px;border-radius:50%;background:var(--accent);animation:typing 1s .4s infinite;"></div></div></div>';
     messagesEl.appendChild(d);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
+    scrollToBottom();
     return d;
   }
 
-  async function sendToServer(msg){
-    const model = document.getElementById("model-select").value;
+  // send to server
+  async function sendToServer(messageText, modelKey) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (SERVER_API_KEY) headers['x-api-key'] = SERVER_API_KEY;
 
-    const res = await fetch("/api/chat", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({
-        message: msg,
-        conversation_id: convId,
-        model
-      })
+    const body = {
+      message: messageText,
+      conversation_id: convId,
+      model: modelKey
+    };
+
+    const resp = await fetch(API, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body)
     });
 
-    const data = await res.json();
-    return data.output?.content || "No reply.";
+    if (!resp.ok) {
+      // try to read text/error
+      let t;
+      try { t = await resp.text(); } catch(e) { t = resp.statusText; }
+      throw new Error('Server error: ' + (t || resp.status));
+    }
+    const data = await resp.json();
+    return data.output?.content || data.error || null;
   }
 
-  async function handleSend(){
-    const text = inputEl.value.trim();
-    if(!text) return;
+  // handle send
+  async function doSend(){
+    if (sending) return;
+    const text = inputBox.value.trim();
+    if (!text) return;
+    sending = true;
+    appendMessage('user', text);
+    inputBox.value = '';
+    setStatus('Sending…');
 
-    addMessage("user", text);
-    inputEl.value = "";
-
-    const t = showTyping();
-
-    const reply = await sendToServer(text);
-
-    t.remove();
-    addMessage("assistant", reply);
+    const typingEl = showTyping();
+    try {
+      const model = modelSelect.value || 'llama_3_1_8b';
+      const reply = await sendToServer(text, model);
+      typingEl.remove();
+      if (!reply) {
+        appendMessage('assistant', 'No response from model.');
+      } else {
+        appendMessage('assistant', reply);
+      }
+    } catch (err) {
+      typingEl.remove();
+      console.error(err);
+      appendMessage('assistant', 'Error: ' + (err.message || 'Network/Server error'));
+    } finally {
+      setStatus('');
+      sending = false;
+    }
   }
 
-  sendBtn.addEventListener("click", handleSend);
-  inputEl.addEventListener("keydown", e => { if(e.key==="Enter") handleSend(); });
+  // clear chat (client + server)
+  clearBtn.addEventListener('click', async ()=>{
+    if (!confirm('Clear chat? This will remove conversation history.')) return;
+    messagesEl.innerHTML = '';
+    // send server clear if endpoint exists
+    try {
+      await fetch('/api/clear/default', { method: 'POST' });
+    } catch(e){ /* ignore */ }
+    // reset convId to new
+    convId = Date.now().toString();
+    localStorage.setItem('ind_conv', convId);
+  });
 
-  historyBtn.addEventListener("click", ()=> sidebar.classList.add("open"));
-  closeSidebar.addEventListener("click", ()=> sidebar.classList.remove("open"));
+  // send on click, Enter (shift+enter = newline)
+  sendBtn.addEventListener('click', doSend);
+  inputBox.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      doSend();
+    }
+  });
+
+  // theme toggle
+  function setLight(on) {
+    if (on) {
+      document.documentElement.classList.add('light');
+      themeToggle.innerText = 'Dark';
+      localStorage.setItem('ind_theme', 'light');
+    } else {
+      document.documentElement.classList.remove('light');
+      themeToggle.innerText = 'Light';
+      localStorage.setItem('ind_theme', 'dark');
+    }
+  }
+  themeToggle.addEventListener('click', ()=> setLight(!document.documentElement.classList.contains('light')));
+  // init theme
+  setLight(localStorage.getItem('ind_theme') === 'light');
+
+  // initial focus
+  inputBox.focus();
+
+  // quick accessibility: long messages wrap, ensure mobile comfortable
+  window.addEventListener('resize', scrollToBottom);
+
+  // expose small helper for debugging
+  window.__indresh = { appendMessage, sendToServer };
 
 })();
 </script>
