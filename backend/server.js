@@ -1,5 +1,5 @@
 // backend/server.js
-// OPTIMIZED VERSION: Prioritizes Speed (Flash) & Better Tone
+// PRIORITY: POWER & INTELLIGENCE (PRO MODEL FIRST)
 
 const express = require("express");
 const cors = require("cors");
@@ -20,51 +20,56 @@ const GROQ_KEY = (process.env.GROQ_KEY || "").trim();
 
 let ACTIVE_GEMINI_MODEL = null;
 
-// --- 1. SMART MODEL FINDER (SPEED PRIORITY) ---
+// --- 1. INTELLIGENT MODEL FINDER ---
 async function findValidGeminiModel() {
   if (!GEMINI_KEY) return null;
   try {
-    console.log("🔍 Checking Google Models...");
+    console.log("🔍 Checking Google Models for INTELLIGENCE...");
     const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_KEY}`;
     const resp = await fetch(url);
     const data = await resp.json();
 
     if (data.models) {
-      // Priority 1: Flash Models (Fastest)
-      let bestModel = data.models.find(m => m.name.includes("flash") && m.supportedGenerationMethods.includes("generateContent"));
+      // Priority 1: PRO Models (सबसे समझदार और पावरफुल)
+      // हम 1.5 Pro को पहले ढूंढेंगे क्योंकि वो स्टेबल और बेस्ट है
+      let bestModel = data.models.find(m => m.name.includes("1.5-pro") && !m.name.includes("vision"));
       
-      // Priority 2: Pro Models (Smarter but Slower)
+      // Priority 2: 2.5 Preview (अगर Pro नहीं मिला तो लेटेस्ट प्रीव्यू)
       if (!bestModel) {
-          bestModel = data.models.find(m => m.name.includes("pro") && !m.name.includes("vision") && m.supportedGenerationMethods.includes("generateContent"));
+          bestModel = data.models.find(m => m.name.includes("preview") && m.name.includes("pro"));
       }
-      
-      // Priority 3: Any Gemini
+
+      // Priority 3: Fallback to Flash (अगर कुछ नहीं मिला)
       if (!bestModel) {
-          bestModel = data.models.find(m => m.name.includes("gemini") && m.supportedGenerationMethods.includes("generateContent"));
+          bestModel = data.models.find(m => m.name.includes("flash"));
       }
 
       if (bestModel) {
         ACTIVE_GEMINI_MODEL = bestModel.name.replace("models/", "");
-        console.log(`✅ SELECTED FASTEST MODEL: [ ${ACTIVE_GEMINI_MODEL} ] 🚀`);
+        console.log(`✅ SELECTED POWERFUL MODEL: [ ${ACTIVE_GEMINI_MODEL} ] 🧠`);
         return ACTIVE_GEMINI_MODEL;
       }
     }
   } catch (e) { console.error("Model check failed:", e.message); }
   
-  ACTIVE_GEMINI_MODEL = "gemini-1.5-flash"; // Default backup
+  // Default Fallback
+  ACTIVE_GEMINI_MODEL = "gemini-1.5-pro"; 
   return ACTIVE_GEMINI_MODEL;
 }
 
 findValidGeminiModel();
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
-// --- SYSTEM PROMPT (FRIENDLY TONE) ---
+// --- SYSTEM PROMPT (INDRESH 2.0 PERSONALITY) ---
 const SYSTEM_INSTRUCTION = `
-You are Indresh 2.0, a smart and friendly AI assistant.
-1. Format your answers beautifully using Markdown (Bold headings, bullet points).
-2. Use a conversational, helpful tone (Hinglish/Hindi allowed).
-3. Do NOT give walls of text. Use spacing.
-4. If asked to write a letter, format it properly.
+You are Indresh 2.0, an advanced and intelligent AI assistant. 
+Your Goal: Provide detailed, accurate, and high-quality responses.
+Language: Use a natural mix of Hindi and English (Hinglish). Talk like a smart, friendly expert.
+Formatting: 
+- ALWAYS use Markdown. 
+- Use **Bold** for headings and key points. 
+- Use lists (bullet points) for steps.
+- Do NOT produce dense walls of text. Break paragraphs.
 `;
 
 app.post("/api/chat", async (req, res) => {
@@ -73,22 +78,24 @@ app.post("/api/chat", async (req, res) => {
     if (!ACTIVE_GEMINI_MODEL) await findValidGeminiModel();
 
     let replyText = "";
+    let via = "";
 
     // GEMINI LOGIC
     if (genAI) {
       const model = genAI.getGenerativeModel({ 
           model: ACTIVE_GEMINI_MODEL,
-          systemInstruction: SYSTEM_INSTRUCTION // Add Personality here
+          systemInstruction: SYSTEM_INSTRUCTION 
       });
       
       const result = await model.generateContent(message);
       const response = await result.response;
       replyText = response.text();
+      via = `Gemini (${ACTIVE_GEMINI_MODEL})`;
     } else {
       replyText = "Gemini Key Missing.";
     }
 
-    return res.json({ output: { role: "assistant", content: replyText } });
+    return res.json({ output: { role: "assistant", content: replyText, via: via } });
 
   } catch (error) {
     return res.json({ output: { role: "assistant", content: `❌ Error: ${error.message}` } });
