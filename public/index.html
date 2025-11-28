@@ -1,3 +1,4 @@
+<!-- public/index.html -->
 <!doctype html>
 <html lang="hi">
 <head>
@@ -6,8 +7,21 @@
   <title>Indresh 2.0 — Multi-Model Demo</title>
   <link rel="icon" href="/favicon.ico">
   <style>
-    :root{ --bg:#0d0d15; --panel:#161622; --user:#2a2a3a; --ai:#1e1e2e; --text:#f0f0f0; --muted:rgba(255,255,255,0.6); --accent:#e0a0ff; --border:rgba(255,255,255,0.06); }
-    .theme-light{ --bg: rgba(249,250,252,1); --panel: rgba(255,255,255,0.75); --user: rgba(245,245,246,1); --ai: rgba(255,255,255,0.95); --text:#111; --muted: rgba(0,0,0,0.55); --accent: #6b5dfc; --border: rgba(0,0,0,0.06); }
+    /* (same styling as before - kept for familiarity) */
+    :root{
+      --bg:#0d0d15; --panel:#161622; --user:#2a2a3a; --ai:#1e1e2e;
+      --text:#f0f0f0; --muted:rgba(255,255,255,0.6); --accent:#e0a0ff; --border:rgba(255,255,255,0.06);
+    }
+    .theme-light{
+      --bg: rgba(249,250,252,1);
+      --panel: rgba(255,255,255,0.75);
+      --user: rgba(245,245,246,1);
+      --ai: rgba(255,255,255,0.95);
+      --text:#111;
+      --muted: rgba(0,0,0,0.55);
+      --accent: #6b5dfc;
+      --border: rgba(0,0,0,0.06);
+    }
     *{box-sizing:border-box;margin:0;padding:0}
     html,body{height:100%}
     body{font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:var(--bg); color:var(--text); display:flex; align-items:center; justify-content:center; padding:18px;}
@@ -58,15 +72,18 @@
           <div class="tiny">आपका सहायक</div>
         </div>
       </div>
+
       <div class="controls" aria-hidden="false">
         <select id="model-select" aria-label="Model selector">
           <option value="llama_3_1_8b_instant">Llama 3.1 (Groq)</option>
-          <option value="gemini_2_5">Gemini 2.5 Flash</option>
+          <option value="gemini_2_5">Gemini 2.5 Flash (Google)</option>
         </select>
         <div id="model-note" class="model-note">Llama 3.1 (Groq) selected by default.</div>
+
         <button id="historyBtn" title="History">History</button>
         <button id="copyAllBtn" title="Copy all">Copy All</button>
         <button id="clearBtn" title="Clear">Clear</button>
+
         <div style="display:flex;gap:8px;align-items:center">
           <button id="themeBtn" title="Theme">Theme</button>
         </div>
@@ -98,6 +115,7 @@
   const sendBtn = document.getElementById('sendBtn');
   const clearBtn = document.getElementById('clearBtn');
   const themeBtn = document.getElementById('themeBtn');
+  const historyBtn = document.getElementById('historyBtn');
   const copyAllBtn = document.getElementById('copyAllBtn');
   const modelSelect = document.getElementById('model-select');
   const modelNote = document.getElementById('model-note');
@@ -132,13 +150,12 @@
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ message: userText, conversation_id: convId, model })
       });
-      const ct = res.headers.get('content-type') || '';
       if(!res.ok){
-        const t = ct.includes('application/json') ? await res.json().catch(()=>null) : await res.text().catch(()=>null);
+        const t = await res.text();
         return { error:true, status: res.status, body: t };
       }
       const j = await res.json();
-      return { error:false, text: j.output?.content || '', via: j.output?.via || null };
+      return { error:false, text: j.output?.content || '', via: j.output?.via || '' };
     }catch(e){ return { error:true, body: String(e) }; }
   }
 
@@ -152,7 +169,7 @@
     const r = await sendToServer(t);
     hideTyping(typingEl);
     if(r.error){
-      addMessage('Indresh 2.0', `Error: ${typeof r.body === 'string' ? r.body : JSON.stringify(r.body)}`);
+      addMessage('Indresh 2.0', `Error: ${r.body || r.status || 'server unreachable'}`);
     } else {
       const text = r.text || 'क्षमा करें — सर्वर ने कुछ नहीं लौटाया।';
       addMessage('Indresh 2.0', text);
