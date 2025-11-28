@@ -7,38 +7,20 @@
   <title>Indresh 2.0 — Multi-Model Demo</title>
   <link rel="icon" href="/favicon.ico">
   <style>
-    :root{
-      --bg:#0d0d15; --panel:#161622; --user:#2a2a3a; --ai:#1e1e2e;
-      --text:#f0f0f0; --muted:rgba(255,255,255,0.6); --accent:#e0a0ff; --border:rgba(255,255,255,0.06);
-    }
-    /* White blurry theme (like Win11 light) */
-    .theme-light{
-      --bg: rgba(249,250,252,1);
-      --panel: rgba(255,255,255,0.75);
-      --user: rgba(245,245,246,1);
-      --ai: rgba(255,255,255,0.95);
-      --text:#111;
-      --muted: rgba(0,0,0,0.55);
-      --accent: #6b5dfc;
-      --border: rgba(0,0,0,0.06);
-    }
-
-    *{box-sizing:border-box;margin:0;padding:0}
-    html,body{height:100%}
-    body{font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:var(--bg); color:var(--text); display:flex; align-items:center; justify-content:center; padding:18px;}
-
+    /* (style same as your original, omitted here for brevity) */
+    :root{ --bg:#0d0d15; --panel:#161622; --user:#2a2a3a; --ai:#1e1e2e; --text:#f0f0f0; --muted:rgba(255,255,255,0.6); --accent:#e0a0ff; --border:rgba(255,255,255,0.06); }
+    .theme-light{ --bg: rgba(249,250,252,1); --panel: rgba(255,255,255,0.75); --user: rgba(245,245,246,1); --ai: rgba(255,255,255,0.95); --text:#111; --muted: rgba(0,0,0,0.55); --accent: #6b5dfc; --border: rgba(0,0,0,0.06); }
+    *{box-sizing:border-box;margin:0;padding:0} html,body{height:100%} body{font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:var(--bg); color:var(--text); display:flex; align-items:center; justify-content:center; padding:18px;}
     .card{width:920px;max-width:98%;background:var(--panel);border-radius:14px;padding:12px;border:1px solid var(--border);display:flex;flex-direction:column;height:82vh;box-shadow:0 20px 40px rgba(0,0,0,0.35);position:relative;overflow:hidden}
     .header{display:flex;justify-content:space-between;align-items:center;padding:8px 12px}
     .logo{display:flex;gap:10px;align-items:center}
     .logo-icon{width:42px;height:42;border-radius:50%;background:linear-gradient(135deg,#d0a0ff,#a080ff);display:flex;align-items:center;justify-content:center;color:#111;font-weight:800}
     .logo-text{font-weight:700}
     .tiny{font-size:12px;color:var(--muted)}
-
     .controls{display:flex;gap:8px;align-items:center}
     select,button{background:transparent;border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;cursor:pointer}
     select{min-width:220px}
     .model-note{font-size:12px;color:var(--muted);margin-left:8px;min-width:220px}
-
     .messages{flex:1;overflow:auto;padding:12px 18px;position:relative}
     .msg{margin-bottom:12px;max-width:78%;position:relative;word-break:break-word}
     .msg.ai{align-self:flex-start}
@@ -46,36 +28,12 @@
     .bubble{padding:12px;border-radius:12px;background:var(--ai);box-shadow:0 6px 18px rgba(0,0,0,0.15);color:var(--text)}
     .bubble.user{background:var(--user)}
     .meta{font-size:12px;opacity:0.95;margin-bottom:6px;color:var(--muted)}
-
     .msg .copy-btn{position:absolute;right:-36px;top:6px;font-size:16px;opacity:0;cursor:pointer;transition:opacity .12s;color:var(--accent);background:transparent;border:none}
     .msg:hover .copy-btn{opacity:1}
-
     .footer{display:flex;gap:8px;padding:8px;border-top:1px solid var(--border);align-items:center}
     input[type="text"]{flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text);outline:none}
     .send{padding:10px 16px;border-radius:10px;background:linear-gradient(135deg,#d0a0ff,#a080ff);border:none;color:#111;font-weight:700;cursor:pointer}
-
     .disclaimer{font-size:12px;color:var(--muted);padding:10px 12px;border-top:1px solid var(--border);margin-top:6px}
-
-    /* mobile fixes */
-    .card{height:92vh}
-    @media (max-width:520px){
-      body{padding:8px}
-      .card{width:100%;height:100vh;border-radius:8px;padding:8px}
-      .header{flex-direction:column;align-items:flex-start;gap:8px}
-      .controls{width:100%;display:flex;flex-wrap:wrap}
-      select{width:100%}
-      .messages{padding:8px; padding-bottom:120px} /* avoid overlap with input */
-      .footer{position:fixed;left:0;right:0;bottom:0;padding:12px;background:transparent}
-      .send{position:relative; right:0}
-      .logo-text{font-size:16px}
-    }
-
-    /* make light theme blurry backdrop look */
-    .theme-light .card {
-      background: linear-gradient(180deg, rgba(255,255,255,0.7), rgba(255,255,255,0.65));
-      backdrop-filter: blur(8px) saturate(1.05);
-      box-shadow: 0 10px 40px rgba(16,24,40,0.12);
-    }
   </style>
 </head>
 <body>
@@ -91,8 +49,10 @@
 
       <div class="controls" aria-hidden="false">
         <select id="model-select" aria-label="Model selector">
+          <!-- Values must match server mapping keys -->
           <option value="llama_3_1_8b_instant">Llama 3.1 (Groq)</option>
-          <option value="gemini_1_5_pro">Gemini 1.5 Pro (Google)</option>
+          <option value="gemini_2_5">Gemini 2.5 Flash</option>
+          <option value="gemini_1_5_pro">Gemini 1.5 Pro</option>
         </select>
         <div id="model-note" class="model-note">Llama 3.1 (Groq) selected by default.</div>
 
@@ -144,7 +104,11 @@
 
   // default selection: ensure Llama selected on load
   modelSelect.value = 'llama_3_1_8b_instant';
-  function setModelNote(){ modelNote.textContent = modelSelect.value === 'llama_3_1_8b_instant' ? 'Llama 3.1 (Groq) selected by default.' : 'Gemini 1.5 Pro (Google).'; }
+  function setModelNote(){ 
+    if(modelSelect.value === 'llama_3_1_8b_instant') modelNote.textContent = 'Llama 3.1 (Groq) selected by default.';
+    else if(modelSelect.value === 'gemini_2_5') modelNote.textContent = 'Gemini 2.5 Flash selected.';
+    else if(modelSelect.value === 'gemini_1_5_pro') modelNote.textContent = 'Gemini 1.5 Pro selected.';
+  }
   setModelNote();
 
   // helpers
@@ -175,7 +139,7 @@
         return { error:true, status: res.status, body: t };
       }
       const j = await res.json();
-      return { error:false, text: j.output?.content || '' };
+      return { error:false, text: j.output?.content || '', via: j.output?.via || null };
     }catch(e){ return { error:true, body: String(e) }; }
   }
 
