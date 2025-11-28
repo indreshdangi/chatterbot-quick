@@ -1,7 +1,5 @@
 // backend/server.js
-// Multi-provider chat proxy — Groq (Llama) + Google Gemini (1.5 Pro / 2.5 Flash).
-// Deploy-ready for Render (uses process.env.PORT). Restart server after changes.
-
+// Multi-provider chat proxy with robust Gemini -> Groq fallback
 const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
@@ -11,7 +9,7 @@ const fetch = require("node-fetch"); // v2 style
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "4mb" }));
+app.use(express.json({ limit: "5mb" }));
 
 const PORT = process.env.PORT || 3000;
 const PROJECT_ROOT = __dirname;
@@ -24,8 +22,7 @@ const GROQ_API_BASE = (process.env.GROQ_API_BASE || "https://api.groq.com/openai
 const GROQ_MODEL_DEFAULT = (process.env.GROQ_MODEL || "llama-3.1-8b-instant").trim();
 
 const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();
-// default env fallback
-const GEMINI_MODEL_ID = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
+const GEMINI_MODEL_ID = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim(); // forced default
 
 // Ensure history file exists
 if (!fs.existsSync(DB_PATH)) {
@@ -76,19 +73,16 @@ async function callGroq(modelId, messagesOrString, opts={}) {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${GROQ_KEY}`
     },
-    body: JSON.stringify(body),
-    timeout: 20000
+    body: JSON.stringify(body)
   });
   const parsed = await safeParseResponse(resp);
   return { provider:"groq", resp, parsed };
 }
 
-// Gemini (Google Generative) - v1beta2 endpoint usage with key query param fallback
+// Gemini (Google Generative)
 async function callGemini(modelId, userMessage, opts={}) {
   if (!GEMINI_KEY) throw new Error("GEMINI_KEY_MISSING");
-  // Use v1beta2 generate endpoint that works in many accounts. If your account requires a different path, set GEMINI_API_BASE env.
-  const base = process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com";
-  const url = `${base}/v1beta2/models/${encodeURIComponent(modelId)}:generate?key=${encodeURIComponent(GEMINI_KEY)}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta2/models/${encodeURIComponent(modelId)}:generate?key=${encodeURIComponent(GEMINI_KEY)}`;
   const body = {
     prompt: { text: String(userMessage) },
     maxOutputTokens: opts.maxOutputTokens || 512,
@@ -97,8 +91,7 @@ async function callGemini(modelId, userMessage, opts={}) {
   const resp = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    timeout: 20000
+    body: JSON.stringify(body)
   });
   const parsed = await safeParseResponse(resp);
   return { provider:"gemini", resp, parsed };
@@ -127,31 +120,33 @@ app.post("/api/chat", async (req, res) => {
       systemMsg = { role: "system", content: "You are Indresh 2.0. User used Latin script (Hinglish/English). Reply in the same script. Do NOT repeat the user's question." };
     }
 
-    // model mapping: client keys -> provider model ids
-    const mk = (modelKey || "").toLowerCase();
-    const GEMINI_KEY_MAP = {
-      "gemini_1_5_pro": "gemini-1.5-pro",
-      "gemini_1_5_flash": "gemini-1.5-flash",
-      "gemini_2_0_flash": "gemini-2.0-flash",
-      "gemini_2_5": "gemini-2.5-flash",
-      "gemini_2_5_flash": "gemini-2.5-flash"
-    };
-
-    // choose provider and call
+    // choose provider: try Gemini first if requested, otherwise Groq.
     let providerResult = null;
     let usedProvider = null;
+    const mk = modelKey.toLowerCase();
     try {
       if (mk.startsWith("gemini")) {
         usedProvider = "gemini";
-        const mappedModelId = GEMINI_KEY_MAP[mk] || GEMINI_MODEL_ID;
-        console.log(`[chat] modelKey=${mk} -> using Gemini model ${mappedModelId}`);
-        providerResult = await callGemini(mappedModelId, message, { maxOutputTokens: 1200, temperature: 0.6 });
+        console.log(`[chat] client requested GEMINI -> using Gemini model ${GEMINI_MODEL_ID}`);
+        providerResult = await callGemini(GEMINI_MODEL_ID, message, { maxOutputTokens: 1200, temperature: 0.6 });
+
+        // If gemini response is not OK or no content -> fallback to groq
+        const p = providerResult && providerResult.parsed;
+        const status = (providerResult.resp && providerResult.resp.status) || (p && p.status) || null;
+        const hasBody = p && (p.json || p.text);
+        if (!providerResult || !hasBody || (status && status !== 200)) {
+          console.warn(`[chat] Gemini returned no usable body or non-200 (status=${status}). Will fallback to GROQ. Parsed:`, providerResult && providerResult.parsed);
+          // attempt fallback to GROQ
+          usedProvider = "groq";
+          const targetModel = GROQ_MODEL_DEFAULT;
+          const messagesArr = [ systemMsg, { role:"user", content: message } ];
+          providerResult = await callGroq(targetModel, messagesArr, { maxOutputTokens: 1400, temperature: 0.6 });
+        }
       } else {
         usedProvider = "groq";
-        const targetModel = GROQ_MODEL_DEFAULT;
-        console.log(`[chat] modelKey=${mk} -> using Groq model ${targetModel}`);
+        console.log(`[chat] client requested GROQ -> using model ${GROQ_MODEL_DEFAULT}`);
         const messagesArr = [ systemMsg, { role:"user", content: message } ];
-        providerResult = await callGroq(targetModel, messagesArr, { maxOutputTokens: 1400, temperature: 0.6 });
+        providerResult = await callGroq(GROQ_MODEL_DEFAULT, messagesArr, { maxOutputTokens: 1400, temperature: 0.6 });
       }
     } catch (provErr) {
       console.warn("Provider call exception:", provErr);
@@ -163,9 +158,9 @@ app.post("/api/chat", async (req, res) => {
     // Parse provider response robustly
     let replyText = null;
     const p = providerResult && providerResult.parsed;
+    console.log("[debug] provider result parsed summary:", p && (p.status || Object.keys(p).slice(0,6)));
     if (p && p.json) {
       const j = p.json;
-      // Groq / OpenAI-like shapes
       replyText =
         j?.choices?.[0]?.message?.content ||
         j?.choices?.[0]?.text ||
@@ -174,24 +169,14 @@ app.post("/api/chat", async (req, res) => {
         j?.generated_text ||
         (typeof j === "string" ? j : null);
 
-      // Gemini shapes: j.candidates[0].content or j.output?.[0]?.content
-      if (!replyText && j?.candidates && j.candidates[0] && j.candidates[0].content) {
-        // candidates content could be a string or object
-        const c = j.candidates[0].content;
-        if (typeof c === "string") replyText = c;
-        else if (c?.text) replyText = c.text;
-        else if (Array.isArray(c)) {
-          replyText = c.map(seg => seg?.text || seg?.content?.[0]?.text || "").filter(Boolean).join("\n");
-        }
-      }
+      // Gemini shapes
+      if (!replyText && j?.candidates && j.candidates[0] && j.candidates[0].content) replyText = j.candidates[0].content;
       if (!replyText && j?.output && Array.isArray(j.output) && j.output[0] && j.output[0].content) {
         const seg = j.output[0].content;
         if (typeof seg === "string") replyText = seg;
         else if (Array.isArray(seg)) {
           const texts = seg.map(s => (s?.text || (s?.content?.[0]?.text) || "")).filter(Boolean);
           if (texts.length) replyText = texts.join("\n");
-        } else if (seg?.text) {
-          replyText = seg.text;
         }
       }
     } else if (p && p.text) {
@@ -204,17 +189,19 @@ app.post("/api/chat", async (req, res) => {
     if (!replyText && providerResult && providerResult.resp) {
       try {
         const raw = await providerResult.resp.text();
-        if (raw && raw.length) {
-          replyText = raw;
-        }
+        if (raw && raw.length) replyText = raw;
       } catch(e){}
     }
 
     if (!replyText) {
       const detail = providerResult && providerResult.parsed ? (providerResult.parsed.json || providerResult.parsed.text || providerResult.parsed.error || null) : null;
-      db[convId].push({ role:"assistant", content: `Provider error: no content from ${usedProvider}`, created_at: new Date().toISOString(), meta:{ provider: usedProvider, detail }}); saveDB(db);
-      console.log("[chat] providerResult.parsed:", JSON.stringify(providerResult && providerResult.parsed, null, 2));
-      return res.status(502).json({ error:"provider_no_content", provider: usedProvider, detail: detail || "no body" });
+      // include raw & status for debugging
+      const rawBody = providerResult && providerResult.resp ? await (providerResult.resp.clone().text().catch(()=>null)) : null;
+      console.error("[error] Provider no content. parsed:", JSON.stringify(providerResult && providerResult.parsed || {}, null, 2));
+      console.error("[error] Provider raw body:", rawBody && rawBody.slice ? rawBody.slice(0,1500) : rawBody);
+      db[convId].push({ role:"assistant", content: `Provider error: no content from ${usedProvider}`, created_at: new Date().toISOString(), meta:{ provider: usedProvider, detail }});
+      saveDB(db);
+      return res.status(502).json({ error:"provider_no_content", provider: usedProvider, detail: detail || "no body", status: (providerResult.resp && providerResult.resp.status), raw: rawBody ? (rawBody.length > 1000 ? rawBody.slice(0,1000) + "..." : rawBody) : null });
     }
 
     // sanitize + replace mentions
