@@ -1,191 +1,123 @@
 // backend/server.js
-// FINAL VERSION: Uses Official Google SDK (@google/generative-ai)
-// This fixes 404/URL errors by handling connection automatically.
+
+// ULTIMATE DEBUG VERSION
+
+// इसमें हम Env Variables पर भरोसा नहीं करेंगे, सीधे कोड में Key डालेंगे।
+
+
 
 const express = require("express");
-const cors = require("cors");
-const fs = require("fs");
-const path = require("path");
-require("dotenv").config();
 
-// IMPORT OFFICIAL GOOGLE LIBRARY
+const cors = require("cors");
+
+const path = require("path");
+
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const fetch = require("node-fetch"); // Kept for Groq
+
+const fetch = require("node-fetch");
+
+
 
 const app = express();
+
 app.use(cors());
+
 app.use(express.json({ limit: "4mb" }));
 
-const PORT = process.env.PORT || 3000;
-const PROJECT_ROOT = __dirname;
-const PUBLIC_DIR = path.join(PROJECT_ROOT, "..", "public");
-const DB_PATH = path.join(PROJECT_ROOT, "history.json");
 
-// --- CONFIGURATION ---
-const GROQ_KEY = (process.env.GROQ_KEY || "").trim();
-const GROQ_API_BASE = (process.env.GROQ_API_BASE || "https://api.groq.com/openai/v1").trim();
-const GROQ_MODEL_DEFAULT = (process.env.GROQ_MODEL || "llama-3.1-8b-instant").trim();
 
-const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();
+const PUBLIC_DIR = path.join(__dirname, "..", "public");
 
-// Setup Google Gen AI Client
-let genAI = null;
-if (GEMINI_KEY) {
-    genAI = new GoogleGenerativeAI(GEMINI_KEY);
-}
 
-// Helpers: DB
-if (!fs.existsSync(DB_PATH)) {
-  try { fs.writeFileSync(DB_PATH, "{}", "utf8"); } catch (e) { console.error("Could not create history.json:", e); }
-}
-function loadDB() {
-  try { return JSON.parse(fs.readFileSync(DB_PATH, "utf8") || "{}"); } catch (e) { console.error("loadDB error:", e); return {}; }
-}
-function saveDB(db) {
-  try { fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8"); } catch (e) { console.error("saveDB error:", e); }
-}
-function containsDevanagari(s){ return /[\u0900-\u097F]/.test(s || ""); }
-function sanitizeReply(text){ if(!text) return ""; if(typeof text !== "string") text = String(text); return text.replace(/\s+/g, " ").trim(); }
 
-/* --- GROQ --- */
-async function callGroq(modelId, messagesOrString, opts={}) {
-  if (!GROQ_KEY) throw new Error("GROQ_KEY_MISSING");
-  const url = `${GROQ_API_BASE}/chat/completions`;
-  const body = {
-    model: modelId,
-    messages: Array.isArray(messagesOrString) ? messagesOrString : [{ role: "user", content: String(messagesOrString) }],
-    max_tokens: opts.maxOutputTokens || 1024,
-    temperature: 0.6
-  };
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${GROQ_KEY}` },
-    body: JSON.stringify(body)
-  });
-  const json = await resp.json();
-  return { provider:"groq", resp, parsed: { ok: resp.ok, json: json, status: resp.status } };
-}
+// ⚠️⚠️⚠️ यहाँ अपनी असली API KEY पेस्ट करो (Quotes के अंदर) ⚠️⚠️⚠️
 
-/* --- GEMINI (OFFICIAL SDK METHOD) --- */
-async function callGemini(userMessage, opts={}) {
-  if (!genAI) throw new Error("GEMINI_KEY_MISSING");
+// टेस्ट के बाद इसे हटा देना!
 
-  // Models to try in order (SDK handles URLs automatically)
-  const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-001", "gemini-1.5-pro"];
-  
-  let lastError = null;
+const DIRECT_GEMINI_KEY = "AIzaSyBk-ZK0yhYfZxyJufNmG8Sd67uTbcc608k"; 
 
-  for (const modelName of modelsToTry) {
-      try {
-          console.log(`[callGemini] Using SDK with model: ${modelName}`);
-          
-          // Get the model instance
-          const model = genAI.getGenerativeModel({ model: modelName });
 
-          // Generate Content
-          const result = await model.generateContent({
-              contents: [{ role: "user", parts: [{ text: userMessage }] }],
-              generationConfig: {
-                  maxOutputTokens: opts.maxOutputTokens || 900,
-                  temperature: 0.6
-              }
-          });
 
-          const response = await result.response;
-          const text = response.text();
-          
-          if(text) {
-              return { provider: "gemini", text: text, modelUsed: modelName };
-          }
-      } catch (e) {
-          console.warn(`[callGemini] SDK failed for ${modelName}:`, e.message);
-          lastError = e;
-      }
-  }
+const genAI = new GoogleGenerativeAI(DIRECT_GEMINI_KEY);
 
-  throw new Error(`All Gemini models failed. Last error: ${lastError?.message}`);
-}
 
-/* --- Main chat endpoint --- */
+
 app.post("/api/chat", async (req, res) => {
+
   try {
-    const message = (req.body.message || "").toString();
-    const convId = req.body.conversation_id || "default";
-    let modelKey = (req.body.model || "").toString().toLowerCase();
 
-    if (!message) return res.status(400).json({ error: "message required" });
+    const message = req.body.message || "";
 
-    // DB Load
-    const db = loadDB();
-    if (!db[convId]) db[convId] = [];
-    db[convId].push({ role:"user", content: message, created_at: new Date().toISOString() });
-    saveDB(db);
+    const modelKey = req.body.model || "";
 
-    // System Prompt
-    let systemMsg;
-    if (containsDevanagari(message)) {
-      systemMsg = { role: "system", content: "You are Indresh 2.0. Reply IN HINDI using Devanagari only." };
-    } else {
-      systemMsg = { role: "system", content: "You are Indresh 2.0. Reply in the same script/language." };
+    
+
+    console.log("User asked:", message);
+
+    console.log("Frontend sent model:", modelKey);
+
+
+
+    // अगर यूजर ने Gemini मांगा है (या Frontend ने कुछ भी भेजा हो)
+
+    // हम जबरदस्ती Gemini ही चलाएंगे टेस्ट के लिए
+
+    if (modelKey.includes("gemini") || modelKey.includes("2.5")) {
+
+        
+
+        console.log("Attemping Gemini with HARDCODED Key...");
+
+        
+
+        // सबसे सुरक्षित मॉडल (Pro) use करेंगे जो कभी fail नहीं होता
+
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+
+
+        const result = await model.generateContent(message);
+
+        const response = await result.response;
+
+        const text = response.text();
+
+
+
+        return res.json({ output: { role: "assistant", content: text, via: "gemini-test-mode" } });
+
     }
 
-    let replyText = null;
-    let usedProvider = null;
 
-    try {
-      if (modelKey.includes("gemini")) {
-        usedProvider = "gemini";
-        // Call SDK function
-        const result = await callGemini(message, { maxOutputTokens: 900 });
-        replyText = result.text;
-      } else {
-        // GROQ
-        usedProvider = "groq";
-        const messagesArr = [ systemMsg, { role:"user", content: message } ];
-        const result = await callGroq(GROQ_MODEL_DEFAULT, messagesArr, { maxOutputTokens: 1400 });
-        const j = result.parsed.json;
-        replyText = j?.choices?.[0]?.message?.content || j?.error?.message;
-      }
 
-    } catch (provErr) {
-      console.error("Provider Error:", provErr);
-      
-      // FALLBACK TO GROQ IF GEMINI FAILS
-      if (usedProvider === "gemini") {
-          console.log("Gemini failed, falling back to Llama 3...");
-          try {
-             const fallback = await callGroq(GROQ_MODEL_DEFAULT, [systemMsg, { role:"user", content: message }]);
-             replyText = fallback.parsed.json?.choices?.[0]?.message?.content;
-             usedProvider = "groq (fallback)";
-          } catch(e) { /* ignore */ }
-      }
-      
-      if(!replyText) return res.status(502).json({ error: "provider_error", detail: provErr.message });
-    }
+    // Fallback to Groq logic here... (अगर Groq भी चाहिए तो)
 
-    if (!replyText) replyText = "Sorry, no response generated.";
+    return res.json({ output: { role: "assistant", content: "Groq testing disabled for now. Only testing Gemini.", via: "system" } });
 
-    replyText = sanitizeReply(String(replyText).replace(/OpenAI|ChatGPT/gi, "Indresh 2.0"));
-    db[convId].push({ role:"assistant", content: replyText, created_at: new Date().toISOString() });
-    saveDB(db);
 
-    return res.json({ output: { role:"assistant", content: replyText, via: usedProvider } });
 
-  } catch (err) {
-    console.error("Server Error:", err);
-    return res.status(500).json({ error:"server_error", details: err.message });
+  } catch (error) {
+
+    console.error("GEMINI FATAL ERROR:", error);
+
+    // यह Error सीधे Chat में दिखेगा ताकि हमें पता चले क्या हुआ
+
+    return res.json({ output: { role: "assistant", content: `❌ ERROR: ${error.message}`, via: "error-log" } });
+
   }
+
 });
 
-/* Static & Other Routes */
-app.get("/api/history/:id", (req,res) => { const db = loadDB(); res.json({ messages: db[req.params.id] || [] }); });
-app.post("/api/clear/:id", (req,res) => { const db = loadDB(); db[req.params.id] = []; saveDB(db); res.json({ ok:true }); });
 
-if (fs.existsSync(PUBLIC_DIR)) {
+
+if (require("fs").existsSync(PUBLIC_DIR)) {
+
   app.use(express.static(PUBLIC_DIR));
+
   app.get("/", (req,res) => res.sendFile(path.join(PUBLIC_DIR,"index.html")));
+
 }
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${PORT}`);
-});
+
+
+app.listen(3000, () => console.log("Test Server Running..."));
