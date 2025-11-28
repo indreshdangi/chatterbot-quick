@@ -1,13 +1,16 @@
 // backend/server.js
-// FIXED VERSION 2.0
-// Updates: Uses "gemini-1.5-flash-001" (pinned version) to fix 404 on Paid Accounts.
+// FINAL VERSION: Uses Official Google SDK (@google/generative-ai)
+// This fixes 404/URL errors by handling connection automatically.
 
 const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
-const fetch = require("node-fetch");
+
+// IMPORT OFFICIAL GOOGLE LIBRARY
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const fetch = require("node-fetch"); // Kept for Groq
 
 const app = express();
 app.use(cors());
@@ -24,8 +27,12 @@ const GROQ_API_BASE = (process.env.GROQ_API_BASE || "https://api.groq.com/openai
 const GROQ_MODEL_DEFAULT = (process.env.GROQ_MODEL || "llama-3.1-8b-instant").trim();
 
 const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();
-// FIX: Using specific version number '001' which is more stable for paid accounts
-const GEMINI_MODEL = "gemini-1.5-flash-001"; 
+
+// Setup Google Gen AI Client
+let genAI = null;
+if (GEMINI_KEY) {
+    genAI = new GoogleGenerativeAI(GEMINI_KEY);
+}
 
 // Helpers: DB
 if (!fs.existsSync(DB_PATH)) {
@@ -37,7 +44,6 @@ function loadDB() {
 function saveDB(db) {
   try { fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8"); } catch (e) { console.error("saveDB error:", e); }
 }
-
 function containsDevanagari(s){ return /[\u0900-\u097F]/.test(s || ""); }
 function sanitizeReply(text){ if(!text) return ""; if(typeof text !== "string") text = String(text); return text.replace(/\s+/g, " ").trim(); }
 
@@ -60,51 +66,44 @@ async function callGroq(modelId, messagesOrString, opts={}) {
   return { provider:"groq", resp, parsed: { ok: resp.ok, json: json, status: resp.status } };
 }
 
-/* --- GEMINI (FIXED FOR PAID ACCOUNTS) --- */
+/* --- GEMINI (OFFICIAL SDK METHOD) --- */
 async function callGemini(userMessage, opts={}) {
-  if (!GEMINI_KEY) throw new Error("GEMINI_KEY_MISSING");
+  if (!genAI) throw new Error("GEMINI_KEY_MISSING");
 
-  // We try specific version '001' first. If that fails, we fallback to 'latest'.
-  const modelsToTry = ["gemini-1.5-flash-001", "gemini-1.5-flash", "gemini-1.5-pro-latest"];
+  // Models to try in order (SDK handles URLs automatically)
+  const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-001", "gemini-1.5-pro"];
   
   let lastError = null;
 
-  for (const modelId of modelsToTry) {
+  for (const modelName of modelsToTry) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_KEY}`;
-        
-        const bodyPayload = {
-            contents: [{ parts: [{ text: String(userMessage) }] }],
-            generationConfig: { maxOutputTokens: opts.maxOutputTokens || 512, temperature: 0.6 }
-        };
+          console.log(`[callGemini] Using SDK with model: ${modelName}`);
+          
+          // Get the model instance
+          const model = genAI.getGenerativeModel({ model: modelName });
 
-        console.log(`[callGemini] Trying model: ${modelId}`); 
+          // Generate Content
+          const result = await model.generateContent({
+              contents: [{ role: "user", parts: [{ text: userMessage }] }],
+              generationConfig: {
+                  maxOutputTokens: opts.maxOutputTokens || 900,
+                  temperature: 0.6
+              }
+          });
 
-        const resp = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(bodyPayload)
-        });
-
-        const json = await resp.json();
-
-        // If successful
-        if (resp.ok && json.candidates && json.candidates.length > 0) {
-            return { provider: "gemini", parsed: { ok: true, json: json }, modelUsed: modelId };
-        }
-
-        // If error, log and try next model
-        console.warn(`[callGemini] Failed with ${modelId}:`, JSON.stringify(json));
-        lastError = json;
-
+          const response = await result.response;
+          const text = response.text();
+          
+          if(text) {
+              return { provider: "gemini", text: text, modelUsed: modelName };
+          }
       } catch (e) {
-          console.error(`[callGemini] Network error with ${modelId}:`, e);
+          console.warn(`[callGemini] SDK failed for ${modelName}:`, e.message);
           lastError = e;
       }
   }
 
-  // If all failed
-  throw new Error(JSON.stringify(lastError || "All Gemini models failed"));
+  throw new Error(`All Gemini models failed. Last error: ${lastError?.message}`);
 }
 
 /* --- Main chat endpoint --- */
@@ -136,15 +135,9 @@ app.post("/api/chat", async (req, res) => {
     try {
       if (modelKey.includes("gemini")) {
         usedProvider = "gemini";
-        // Call new robust Gemini function
+        // Call SDK function
         const result = await callGemini(message, { maxOutputTokens: 900 });
-        
-        if (result.parsed.json.candidates[0].content.parts[0].text) {
-            replyText = result.parsed.json.candidates[0].content.parts[0].text;
-        } else {
-            throw new Error("Empty content from Gemini");
-        }
-
+        replyText = result.text;
       } else {
         // GROQ
         usedProvider = "groq";
@@ -156,7 +149,8 @@ app.post("/api/chat", async (req, res) => {
 
     } catch (provErr) {
       console.error("Provider Error:", provErr);
-      // Fallback to Groq if Gemini fails completely
+      
+      // FALLBACK TO GROQ IF GEMINI FAILS
       if (usedProvider === "gemini") {
           console.log("Gemini failed, falling back to Llama 3...");
           try {
