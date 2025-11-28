@@ -1,6 +1,5 @@
 // backend/server.js
-// AUTO-DETECT MODEL VERSION
-// यह कोड Google से पूछेगा कि कौन सा मॉडल Available है और उसे ही Use करेगा।
+// OPTIMIZED VERSION: Prioritizes Speed (Flash) & Better Tone
 
 const express = require("express");
 const cors = require("cors");
@@ -15,122 +14,88 @@ app.use(express.json({ limit: "4mb" }));
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
-const DB_PATH = path.join(__dirname, "history.json");
 
-// --- CONFIGURATION ---
-// अपनी API Key ENV से लें (Render Environment Variable)
 const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();
 const GROQ_KEY = (process.env.GROQ_KEY || "").trim();
 
-// Global Variable to store the working model name
 let ACTIVE_GEMINI_MODEL = null;
 
-// --- 1. MAGIC FUNCTION: FIND VALID MODEL ---
+// --- 1. SMART MODEL FINDER (SPEED PRIORITY) ---
 async function findValidGeminiModel() {
-  if (!GEMINI_KEY) {
-    console.log("❌ GEMINI_KEY missing in Environment Variables.");
-    return null;
-  }
-
+  if (!GEMINI_KEY) return null;
   try {
-    console.log("🔍 Asking Google for available models...");
+    console.log("🔍 Checking Google Models...");
     const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_KEY}`;
     const resp = await fetch(url);
     const data = await resp.json();
 
     if (data.models) {
-      // ऐसा मॉडल ढूंढो जो 'generateContent' को support करता हो
-      // और जिसमें 'gemini' लिखा हो
-      const validModel = data.models.find(m => 
-        m.name.includes("gemini") && 
-        m.supportedGenerationMethods.includes("generateContent") &&
-        !m.name.includes("vision") // text only preferred first
-      );
+      // Priority 1: Flash Models (Fastest)
+      let bestModel = data.models.find(m => m.name.includes("flash") && m.supportedGenerationMethods.includes("generateContent"));
+      
+      // Priority 2: Pro Models (Smarter but Slower)
+      if (!bestModel) {
+          bestModel = data.models.find(m => m.name.includes("pro") && !m.name.includes("vision") && m.supportedGenerationMethods.includes("generateContent"));
+      }
+      
+      // Priority 3: Any Gemini
+      if (!bestModel) {
+          bestModel = data.models.find(m => m.name.includes("gemini") && m.supportedGenerationMethods.includes("generateContent"));
+      }
 
-      if (validModel) {
-        // "models/gemini-pro" -> "gemini-pro"
-        ACTIVE_GEMINI_MODEL = validModel.name.replace("models/", "");
-        console.log(`✅ SUCCESS: Auto-detected working model: [ ${ACTIVE_GEMINI_MODEL} ]`);
+      if (bestModel) {
+        ACTIVE_GEMINI_MODEL = bestModel.name.replace("models/", "");
+        console.log(`✅ SELECTED FASTEST MODEL: [ ${ACTIVE_GEMINI_MODEL} ] 🚀`);
         return ACTIVE_GEMINI_MODEL;
       }
     }
-    
-    console.warn("⚠️ No suitable Gemini model found in list. Response:", JSON.stringify(data));
-  } catch (e) {
-    console.error("❌ Failed to list models:", e.message);
-  }
+  } catch (e) { console.error("Model check failed:", e.message); }
   
-  // Fallback if auto-detect fails
-  console.log("⚠️ Fallback to 'gemini-pro'");
-  ACTIVE_GEMINI_MODEL = "gemini-pro";
+  ACTIVE_GEMINI_MODEL = "gemini-1.5-flash"; // Default backup
   return ACTIVE_GEMINI_MODEL;
 }
 
-// Server start होते ही सही मॉडल ढूंढो
 findValidGeminiModel();
-
-// --- 2. SETUP SDK ---
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
-/* --- CHAT ENDPOINT --- */
+// --- SYSTEM PROMPT (FRIENDLY TONE) ---
+const SYSTEM_INSTRUCTION = `
+You are Indresh 2.0, a smart and friendly AI assistant.
+1. Format your answers beautifully using Markdown (Bold headings, bullet points).
+2. Use a conversational, helpful tone (Hinglish/Hindi allowed).
+3. Do NOT give walls of text. Use spacing.
+4. If asked to write a letter, format it properly.
+`;
+
 app.post("/api/chat", async (req, res) => {
   try {
-    const message = (req.body.message || "").toString();
-    const modelKey = (req.body.model || "").toString();
-    
-    // अगर Auto-detect अभी पूरा नहीं हुआ है, तो फिर से try करो
+    const message = req.body.message || "";
     if (!ACTIVE_GEMINI_MODEL) await findValidGeminiModel();
 
     let replyText = "";
-    let usedProvider = "";
 
-    // --- GEMINI LOGIC ---
-    if (modelKey.includes("gemini")) {
-      usedProvider = `gemini (${ACTIVE_GEMINI_MODEL})`;
+    // GEMINI LOGIC
+    if (genAI) {
+      const model = genAI.getGenerativeModel({ 
+          model: ACTIVE_GEMINI_MODEL,
+          systemInstruction: SYSTEM_INSTRUCTION // Add Personality here
+      });
       
-      if (!genAI) throw new Error("GEMINI_KEY is missing on server.");
-      
-      console.log(`🤖 Generatig with: ${ACTIVE_GEMINI_MODEL}`);
-      
-      const model = genAI.getGenerativeModel({ model: ACTIVE_GEMINI_MODEL });
       const result = await model.generateContent(message);
       const response = await result.response;
       replyText = response.text();
-    
-    } 
-    // --- GROQ LOGIC (Backup) ---
-    else {
-      usedProvider = "groq";
-      const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${GROQ_KEY}` },
-        body: JSON.stringify({
-           model: "llama-3.1-8b-instant",
-           messages: [{ role: "user", content: message }]
-        })
-      });
-      const json = await resp.json();
-      replyText = json.choices?.[0]?.message?.content || "Error from Groq";
+    } else {
+      replyText = "Gemini Key Missing.";
     }
 
-    return res.json({ output: { role: "assistant", content: replyText, via: usedProvider } });
+    return res.json({ output: { role: "assistant", content: replyText } });
 
   } catch (error) {
-    console.error("SERVER ERROR:", error);
-    // Error Details User ko dikhao taaki pata chale
-    return res.json({ 
-      output: { 
-        role: "assistant", 
-        content: `❌ Error: ${error.message}\n(Model tried: ${ACTIVE_GEMINI_MODEL})`, 
-        via: "error" 
-      } 
-    });
+    return res.json({ output: { role: "assistant", content: `❌ Error: ${error.message}` } });
   }
 });
 
-// Serve Frontend
-const fs = require("fs");
-if (fs.existsSync(PUBLIC_DIR)) {
+if (require("fs").existsSync(PUBLIC_DIR)) {
   app.use(express.static(PUBLIC_DIR));
   app.get("/", (req,res) => res.sendFile(path.join(PUBLIC_DIR,"index.html")));
 }
