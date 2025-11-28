@@ -2,15 +2,18 @@
 <!doctype html>
 <html lang="hi">
 <head>
-<link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#0ea5a4">
-<link rel="apple-touch-icon" href="/icons/icon-192.png">
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Indresh 2.0 — Multi-Model Demo</title>
+
+  <!-- PWA / icons -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0ea5a4">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
   <link rel="icon" href="/favicon.ico">
+
   <style>
-    /* (same styling as before - kept for familiarity) */
     :root{
       --bg:#0d0d15; --panel:#161622; --user:#2a2a3a; --ai:#1e1e2e;
       --text:#f0f0f0; --muted:rgba(255,255,255,0.6); --accent:#e0a0ff; --border:rgba(255,255,255,0.06);
@@ -199,7 +202,8 @@
   })();
 })();
 </script>
-</body>
+
+<!-- Service Worker registration (only once) -->
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js')
@@ -207,4 +211,6 @@ if ('serviceWorker' in navigator) {
     .catch(err => console.log('SW failed', err));
 }
 </script>
+
+</body>
 </html>
