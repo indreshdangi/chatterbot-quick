@@ -1,31 +1,31 @@
 // backend/server.js
-// Multi-provider chat proxy — Groq (Llama) default + Gemini 2.5 Flash (Google).
-// Designed to run on Render or similar (set env vars in Render dashboard).
-// Restart with: node server.js
+// Multi-provider chat proxy — Llama (Groq) default + Gemini (Google).
+// Restart server with: node server.js
 
 const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
-const fetch = require("node-fetch"); // if Node v18+ you can remove and use global fetch
+const fetch = require("node-fetch"); // v2 style
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "3mb" }));
+app.use(express.json({ limit: "2mb" }));
 
 const PORT = process.env.PORT || 3000;
 const PROJECT_ROOT = __dirname;
 const PUBLIC_DIR = path.join(PROJECT_ROOT, "..", "public");
 const DB_PATH = path.join(PROJECT_ROOT, "history.json");
 
-// Env keys
+// Env keys (trim)
 const GROQ_KEY = (process.env.GROQ_KEY || "").trim();
 const GROQ_API_BASE = (process.env.GROQ_API_BASE || "https://api.groq.com/openai/v1").trim();
+// Default Groq model id (keep a cheap default)
 const GROQ_MODEL_DEFAULT = (process.env.GROQ_MODEL || "llama-3.1-8b-instant").trim();
 
 const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();
-// Use 2.5 flash as the single Gemini model for production
+// Use latest recommended: gemini-2.5-flash by default. Change via env GEMINI_MODEL
 const GEMINI_MODEL_ID = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
 
 // Ensure history file exists
@@ -39,7 +39,7 @@ function saveDB(db) {
   try { fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8"); } catch (e) { console.error("saveDB error:", e); }
 }
 
-// small helpers
+// Helpers
 function containsDevanagari(s){ return /[\u0900-\u097F]/.test(s || ""); }
 function sanitizeReply(text){ if(!text) return ""; if(typeof text !== "string") text = String(text); return text.replace(/\s+/g, " ").trim(); }
 
@@ -57,6 +57,110 @@ async function safeParseResponse(res){
   } catch(e){
     return { ok:false, error:e, text:null };
   }
+}
+
+/** Robust extractor for provider responses (OpenAI-like, Groq, Gemini) **/
+function extractTextFromProviderJson(j) {
+  if (!j) return null;
+
+  // 1) OpenAI/Groq-style: choices[0].message.content or choices[0].text
+  try {
+    if (j.choices && Array.isArray(j.choices) && j.choices[0]) {
+      const c = j.choices[0];
+      // chat-style
+      if (c.message && (c.message.content || c.message.role)) {
+        if (typeof c.message.content === "string" && c.message.content.trim()) return c.message.content;
+        // sometimes content is object
+        if (c.message.content && typeof c.message.content === "object") {
+          // fallback to text fields inside
+          if (c.message.content.text) return c.message.content.text;
+        }
+      }
+      if (typeof c.text === "string" && c.text.trim()) return c.text;
+    }
+  } catch(e){ /* ignore */ }
+
+  // 2) Common direct shapes
+  if (typeof j.generated_text === "string" && j.generated_text.trim()) return j.generated_text;
+  if (typeof j.output === "string" && j.output.trim()) return j.output;
+
+  // 3) Some providers return j.output.text or j.output[0].content.text
+  try {
+    if (j.output) {
+      // output.text
+      if (typeof j.output.text === "string" && j.output.text.trim()) return j.output.text;
+
+      // output is array with content segments
+      if (Array.isArray(j.output) && j.output.length) {
+        // try join content.text or content parts
+        const out0 = j.output[0];
+        // if output[0].content is array or string
+        if (out0.content) {
+          if (typeof out0.content === "string" && out0.content.trim()) return out0.content;
+          if (Array.isArray(out0.content)) {
+            const texts = out0.content.map(seg => (seg.text || seg)).filter(Boolean).map(String);
+            if (texts.length) return texts.join(" ");
+          }
+          // maybe out0.content is object with parts
+          if (out0.content.parts && Array.isArray(out0.content.parts)) {
+            const ptexts = out0.content.parts.map(p => p.text || p).filter(Boolean).map(String);
+            if (ptexts.length) return ptexts.join(" ");
+          }
+        }
+      }
+    }
+  } catch(e){ /* ignore */ }
+
+  // 4) Gemini-style: candidates[].content.parts[].text OR candidates[].content (string)
+  try {
+    if (j.candidates && Array.isArray(j.candidates) && j.candidates[0]) {
+      const cand = j.candidates[0];
+
+      // candidate.content.parts (array)
+      if (cand.content && cand.content.parts && Array.isArray(cand.content.parts)) {
+        const parts = cand.content.parts.map(p => {
+          if (typeof p === "string") return p;
+          if (p && p.text) return p.text;
+          if (p && p.content) {
+            // sometimes nested objects
+            if (typeof p.content === "string") return p.content;
+            if (Array.isArray(p.content)) return p.content.map(x => x.text || x).filter(Boolean).join(" ");
+          }
+          return "";
+        }).filter(Boolean);
+        if (parts.length) return parts.join(" ");
+      }
+
+      // candidate.content might be string
+      if (typeof cand.content === "string" && cand.content.trim()) return cand.content;
+
+      // candidate.content may be object with text or content fields
+      if (cand.content && typeof cand.content === "object") {
+        // try cand.content.text
+        if (cand.content.text && typeof cand.content.text === "string" && cand.content.text.trim()) return cand.content.text;
+        // try nested content[].text
+        if (Array.isArray(cand.content) && cand.content.length) {
+          const txts = cand.content.map(x => (x && x.text) || x).filter(Boolean).map(String);
+          if (txts.length) return txts.join(" ");
+        }
+      }
+    }
+  } catch(e){ /* ignore */ }
+
+  // 5) legacy structures: j.data[0].text
+  try {
+    if (j.data && Array.isArray(j.data) && j.data[0] && typeof j.data[0].text === "string") {
+      const t = j.data[0].text;
+      if (t && t.trim()) return t;
+    }
+  } catch(e){ /* ignore */ }
+
+  // 6) If nothing matched, attempt to stringify some common fields if they exist (small)
+  try {
+    if (j.result && typeof j.result === "string" && j.result.trim()) return j.result;
+  } catch(e){}
+
+  return null;
 }
 
 /* --- Provider callers --- */
@@ -77,42 +181,29 @@ async function callGroq(modelId, messagesOrString, opts={}) {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${GROQ_KEY}`
     },
-    body: JSON.stringify(body),
-    timeout: 60000
+    body: JSON.stringify(body)
   });
   const parsed = await safeParseResponse(resp);
-  return { provider:"groq", resp, parsed };
+  return { provider:"groq", resp, parsed, rawBody: parsed.json || parsed.text || null };
 }
 
-// Gemini (Google Generative) — correct v1 endpoint (:generateContent)
+// Gemini (Google Generative) - key method
 async function callGemini(modelId, userMessage, opts={}) {
   if (!GEMINI_KEY) throw new Error("GEMINI_KEY_MISSING");
-  // Use v1 :generateContent endpoint (works with modern Gemini models)
-  const url = `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(GEMINI_KEY)}`;
-
+  // Official endpoint shape (key query param)
+  const url = `https://generativelanguage.googleapis.com/v1beta2/models/${encodeURIComponent(modelId)}:generate?key=${encodeURIComponent(GEMINI_KEY)}`;
   const body = {
-    // recommended shape: contents array with parts
-    contents: [
-      {
-        role: "user",
-        parts: [{ text: String(userMessage) }]
-      }
-    ],
-    // generation config
-    generationConfig: {
-      maxOutputTokens: opts.maxOutputTokens || 512,
-      temperature: typeof opts.temperature === "number" ? opts.temperature : 0.6
-    }
+    prompt: { text: String(userMessage) },
+    maxOutputTokens: opts.maxOutputTokens || 512,
+    temperature: typeof opts.temperature === "number" ? opts.temperature : 0.6
   };
-
   const resp = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    timeout: 60000
+    body: JSON.stringify(body)
   });
   const parsed = await safeParseResponse(resp);
-  return { provider:"gemini", resp, parsed };
+  return { provider:"gemini", resp, parsed, rawBody: parsed.json || parsed.text || null };
 }
 
 /* --- Main chat endpoint --- */
@@ -121,36 +212,38 @@ app.post("/api/chat", async (req, res) => {
     const message = (req.body.message || "").toString();
     const convId = req.body.conversation_id || "default";
     // model keys we accept from client
+    // 'llama_3_1_8b_instant' => Groq default
+    // 'gemini_2_5' => Google Gemini
     const modelKey = (req.body.model || "").toString().trim() || "llama_3_1_8b_instant";
 
     if (!message) return res.status(400).json({ error: "message required" });
 
-    // persist user message
+    // save user message
     const db = loadDB();
     if (!db[convId]) db[convId] = [];
     db[convId].push({ role:"user", content: message, created_at: new Date().toISOString() });
     saveDB(db);
 
-    // system prompt: enforce output script
+    // system prompt: enforce script -> reply in same script
     let systemMsg;
     if (containsDevanagari(message)) {
-      systemMsg = { role: "system", content: "You are Indresh 2.0. Reply IN HINDI using Devanagari only. Do NOT repeat the user's question. Keep answers clear and concise." };
+      systemMsg = { role: "system", content: "You are Indresh 2.0. User used Devanagari Hindi. Reply IN HINDI using Devanagari only. Do NOT repeat the user's question. Keep answers clear and concise." };
     } else {
-      systemMsg = { role: "system", content: "You are Indresh 2.0. Reply in the same script as the user (Hinglish/English). Do NOT repeat the user's question." };
+      systemMsg = { role: "system", content: "You are Indresh 2.0. User used Latin script (Hinglish/English). Reply in the same script. Do NOT repeat the user's question." };
     }
 
-    // Choose provider
+    // choose provider and call
     let providerResult = null;
     let usedProvider = null;
-
-    // We'll prefer Gemini when client asks, otherwise default to GROQ Llama
     try {
-      if (modelKey === "gemini_2_5") {
+      if (modelKey === "gemini_2_5" || modelKey.startsWith("gemini")) {
         usedProvider = "gemini";
-        providerResult = await callGemini(GEMINI_MODEL_ID, message, { maxOutputTokens: 900, temperature: 0.6 });
+        // call Gemini with the configured model id
+        providerResult = await callGemini(GEMINI_MODEL_ID, message, { maxOutputTokens: 1200, temperature: 0.6 });
       } else {
+        // default -> Groq Llama 3.1 8b instant
         usedProvider = "groq";
-        const targetModel = GROQ_MODEL_DEFAULT;
+        const targetModel = GROQ_MODEL_DEFAULT; // e.g. "llama-3.1-8b-instant"
         const messagesArr = [ systemMsg, { role:"user", content: message } ];
         providerResult = await callGroq(targetModel, messagesArr, { maxOutputTokens: 1400, temperature: 0.6 });
       }
@@ -166,46 +259,39 @@ app.post("/api/chat", async (req, res) => {
     const p = providerResult && providerResult.parsed;
     if (p && p.json) {
       const j = p.json;
+      // try generic extractor
+      replyText = extractTextFromProviderJson(j);
 
-      // --- GROQ / OpenAI-like shapes ---
-      replyText =
-        j?.choices?.[0]?.message?.content ||
-        j?.choices?.[0]?.text ||
-        j?.output?.text ||
-        j?.candidates?.[0]?.content ||
-        j?.generated_text || null;
-
-      // --- Gemini v1 shape: candidates[].content.parts[].text
-      if (!replyText && j?.candidates && Array.isArray(j.candidates) && j.candidates[0]) {
-        // try typical Gemini shape
-        const cand = j.candidates[0];
-        if (cand.content && Array.isArray(cand.content.parts) && cand.content.parts[0] && cand.content.parts[0].text) {
-          replyText = cand.content.parts.map(p => p.text).join("\n");
-        } else if (cand.content && typeof cand.content === "string") {
-          replyText = cand.content;
-        }
+      // As extra attempt: if json contains top-level text-like fields
+      if (!replyText) {
+        // try direct fallback to stringifying small useful keys (but avoid sending huge objects)
+        if (j?.error && typeof j.error === "string") replyText = `Error from provider: ${j.error}`;
       }
 
-      // Another Gemini possible shape: output[0].content -> parts
-      if (!replyText && j?.output && Array.isArray(j.output) && j.output[0] && j.output[0].content) {
-        const seg = j.output[0].content;
-        if (typeof seg === "string") replyText = seg;
-        else if (Array.isArray(seg)) {
-          const texts = seg.map(s => (s?.text || "")).filter(Boolean);
-          if (texts.length) replyText = texts.join("\n");
-        }
-      }
+      // log parsed result for debugging
+      console.log("[debug] providerResult.parsed:", { provider: usedProvider, status: p.status, parsedKeys: Object.keys(j || {}), extractedTextExists: !!replyText });
     } else if (p && p.text) {
       replyText = p.text;
     } else if (p && p.ok === false && p.error) {
       replyText = `Provider returned error: ${JSON.stringify(p.error)}`;
     }
 
-    // fallback: raw body text
+    // fallback: try raw text from response if no parsed content
     if (!replyText && providerResult && providerResult.resp) {
       try {
         const raw = await providerResult.resp.text();
-        if (raw && raw.length) replyText = raw;
+        if (raw && raw.length) {
+          // attempt to extract JSON if raw text looks like JSON
+          try {
+            const parsedRaw = JSON.parse(raw);
+            const extracted = extractTextFromProviderJson(parsedRaw);
+            if (extracted) replyText = extracted;
+            else replyText = String(parsedRaw).slice(0, 200); // small fallback
+          } catch(e) {
+            // not JSON: use raw string
+            replyText = raw.slice(0, 1000);
+          }
+        }
       } catch(e){}
     }
 
@@ -213,31 +299,10 @@ app.post("/api/chat", async (req, res) => {
       const detail = providerResult && providerResult.parsed ? (providerResult.parsed.json || providerResult.parsed.text || providerResult.parsed.error || null) : null;
       db[convId].push({ role:"assistant", content: `Provider error: no content from ${usedProvider}`, created_at: new Date().toISOString(), meta:{ provider: usedProvider, detail }} );
       saveDB(db);
-      // If Gemini failed and we are not already on GROQ, try fallback to GROQ once
-      if (usedProvider === "gemini" && GROQ_KEY) {
-        try {
-          const messagesArr = [ systemMsg, { role:"user", content: message } ];
-          const fallback = await callGroq(GROQ_MODEL_DEFAULT, messagesArr, { maxOutputTokens: 900, temperature: 0.6 });
-          // parse fallback quickly
-          let fbText = null;
-          if (fallback.parsed && fallback.parsed.json) {
-            const jj = fallback.parsed.json;
-            fbText = jj?.choices?.[0]?.message?.content || jj?.choices?.[0]?.text || jj?.output?.text || (typeof jj === "string" ? jj : null);
-          } else if (fallback.parsed && fallback.parsed.text) fbText = fallback.parsed.text;
-          if (fbText) {
-            fbText = sanitizeReply(String(fbText));
-            db[convId].push({ role:"assistant", content: fbText, created_at: new Date().toISOString(), meta:{ via:"groq_fallback" }});
-            saveDB(db);
-            return res.json({ output: { role:"assistant", content: fbText, via: "groq_fallback" } });
-          }
-        } catch(e) {
-          console.warn("fallback to groq failed:", e);
-        }
-      }
       return res.status(502).json({ error:"provider_no_content", provider: usedProvider, detail: detail || "no body" });
     }
 
-    // sanitize + replace banned names
+    // sanitize + replace mentions
     replyText = sanitizeReply(String(replyText).replace(/OpenAI|ChatGPT/gi, "Indresh 2.0"));
 
     db[convId].push({ role:"assistant", content: replyText, created_at: new Date().toISOString() });
@@ -273,10 +338,10 @@ if (fs.existsSync(PUBLIC_DIR)) {
 const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running http://0.0.0.0:${PORT}`);
   console.log("PUBLIC_DIR:", PUBLIC_DIR, "exists:", fs.existsSync(PUBLIC_DIR));
-  console.log("GROQ_KEY:", GROQ_KEY ? "SET" : "MISSING");
+  console.log("GROQ_KEY:", GROQ_KEY ? "SET len="+GROQ_KEY.length : "MISSING");
   console.log("GROQ_API_BASE:", GROQ_API_BASE);
   console.log("GROQ_MODEL_DEFAULT:", GROQ_MODEL_DEFAULT);
-  console.log("GEMINI_KEY:", GEMINI_KEY ? "SET" : "MISSING");
+  console.log("GEMINI_KEY:", GEMINI_KEY ? "SET len="+GEMINI_KEY.length : "MISSING");
   console.log("GEMINI_MODEL:", GEMINI_MODEL_ID);
 });
 
