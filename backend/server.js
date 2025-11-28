@@ -1,6 +1,6 @@
 // backend/server.js
-// Multi-provider chat proxy — Llama (Groq) default + Gemini 2.5 Flash (Google).
-// Restart server with: node server.js
+// Multi-provider chat proxy — Groq (Llama) + Google Gemini (1.5 Pro / 2.5 Flash).
+// Deploy-ready for Render (uses process.env.PORT). Restart server after changes.
 
 const express = require("express");
 const cors = require("cors");
@@ -11,7 +11,7 @@ const fetch = require("node-fetch"); // v2 style
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "4mb" }));
 
 const PORT = process.env.PORT || 3000;
 const PROJECT_ROOT = __dirname;
@@ -21,12 +21,11 @@ const DB_PATH = path.join(PROJECT_ROOT, "history.json");
 // Env keys (trim)
 const GROQ_KEY = (process.env.GROQ_KEY || "").trim();
 const GROQ_API_BASE = (process.env.GROQ_API_BASE || "https://api.groq.com/openai/v1").trim();
-// Default Groq model id (keep a cheap default)
 const GROQ_MODEL_DEFAULT = (process.env.GROQ_MODEL || "llama-3.1-8b-instant").trim();
 
 const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();
-// Official model id per Google docs:
-const GEMINI_MODEL_ID = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim(); // gemini-2.5-flash
+// default env fallback
+const GEMINI_MODEL_ID = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
 
 // Ensure history file exists
 if (!fs.existsSync(DB_PATH)) {
@@ -77,18 +76,19 @@ async function callGroq(modelId, messagesOrString, opts={}) {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${GROQ_KEY}`
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    timeout: 20000
   });
   const parsed = await safeParseResponse(resp);
   return { provider:"groq", resp, parsed };
 }
 
-// Gemini (Google Generative) - key method
+// Gemini (Google Generative) - v1beta2 endpoint usage with key query param fallback
 async function callGemini(modelId, userMessage, opts={}) {
   if (!GEMINI_KEY) throw new Error("GEMINI_KEY_MISSING");
-  // Official endpoint shape (key query param)
-  const url = `https://generativelanguage.googleapis.com/v1beta2/models/${encodeURIComponent(modelId)}:generate?key=${encodeURIComponent(GEMINI_KEY)}`;
-  // Use prompt.text as docs show
+  // Use v1beta2 generate endpoint that works in many accounts. If your account requires a different path, set GEMINI_API_BASE env.
+  const base = process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com";
+  const url = `${base}/v1beta2/models/${encodeURIComponent(modelId)}:generate?key=${encodeURIComponent(GEMINI_KEY)}`;
   const body = {
     prompt: { text: String(userMessage) },
     maxOutputTokens: opts.maxOutputTokens || 512,
@@ -97,7 +97,8 @@ async function callGemini(modelId, userMessage, opts={}) {
   const resp = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    timeout: 20000
   });
   const parsed = await safeParseResponse(resp);
   return { provider:"gemini", resp, parsed };
@@ -108,9 +109,6 @@ app.post("/api/chat", async (req, res) => {
   try {
     const message = (req.body.message || "").toString();
     const convId = req.body.conversation_id || "default";
-    // model keys we accept from client
-    // 'llama_3_1_8b_instant' => Groq default
-    // 'gemini_2_5' => Google Gemini
     const modelKey = (req.body.model || "").toString().trim() || "llama_3_1_8b_instant";
 
     if (!message) return res.status(400).json({ error: "message required" });
@@ -129,18 +127,29 @@ app.post("/api/chat", async (req, res) => {
       systemMsg = { role: "system", content: "You are Indresh 2.0. User used Latin script (Hinglish/English). Reply in the same script. Do NOT repeat the user's question." };
     }
 
+    // model mapping: client keys -> provider model ids
+    const mk = (modelKey || "").toLowerCase();
+    const GEMINI_KEY_MAP = {
+      "gemini_1_5_pro": "gemini-1.5-pro",
+      "gemini_1_5_flash": "gemini-1.5-flash",
+      "gemini_2_0_flash": "gemini-2.0-flash",
+      "gemini_2_5": "gemini-2.5-flash",
+      "gemini_2_5_flash": "gemini-2.5-flash"
+    };
+
     // choose provider and call
     let providerResult = null;
     let usedProvider = null;
     try {
-      if (modelKey === "gemini_2_5") {
+      if (mk.startsWith("gemini")) {
         usedProvider = "gemini";
-        providerResult = await callGemini(GEMINI_MODEL_ID, message, { maxOutputTokens: 1200, temperature: 0.6 });
+        const mappedModelId = GEMINI_KEY_MAP[mk] || GEMINI_MODEL_ID;
+        console.log(`[chat] modelKey=${mk} -> using Gemini model ${mappedModelId}`);
+        providerResult = await callGemini(mappedModelId, message, { maxOutputTokens: 1200, temperature: 0.6 });
       } else {
-        // default -> Groq Llama 3.1 8b instant
         usedProvider = "groq";
-        // send system+user as messages array
-        const targetModel = GROQ_MODEL_DEFAULT; // e.g. "llama-3.1-8b-instant"
+        const targetModel = GROQ_MODEL_DEFAULT;
+        console.log(`[chat] modelKey=${mk} -> using Groq model ${targetModel}`);
         const messagesArr = [ systemMsg, { role:"user", content: message } ];
         providerResult = await callGroq(targetModel, messagesArr, { maxOutputTokens: 1400, temperature: 0.6 });
       }
@@ -156,7 +165,7 @@ app.post("/api/chat", async (req, res) => {
     const p = providerResult && providerResult.parsed;
     if (p && p.json) {
       const j = p.json;
-      // Groq / OpenAI-like
+      // Groq / OpenAI-like shapes
       replyText =
         j?.choices?.[0]?.message?.content ||
         j?.choices?.[0]?.text ||
@@ -165,16 +174,24 @@ app.post("/api/chat", async (req, res) => {
         j?.generated_text ||
         (typeof j === "string" ? j : null);
 
-      // Gemini shape: j.candidates[0].content or j.output?.[0]?.content
-      if (!replyText && j?.candidates && j.candidates[0] && j.candidates[0].content) replyText = j.candidates[0].content;
+      // Gemini shapes: j.candidates[0].content or j.output?.[0]?.content
+      if (!replyText && j?.candidates && j.candidates[0] && j.candidates[0].content) {
+        // candidates content could be a string or object
+        const c = j.candidates[0].content;
+        if (typeof c === "string") replyText = c;
+        else if (c?.text) replyText = c.text;
+        else if (Array.isArray(c)) {
+          replyText = c.map(seg => seg?.text || seg?.content?.[0]?.text || "").filter(Boolean).join("\n");
+        }
+      }
       if (!replyText && j?.output && Array.isArray(j.output) && j.output[0] && j.output[0].content) {
-        // try to extract text segments
         const seg = j.output[0].content;
         if (typeof seg === "string") replyText = seg;
         else if (Array.isArray(seg)) {
-          // join text segments if present
           const texts = seg.map(s => (s?.text || (s?.content?.[0]?.text) || "")).filter(Boolean);
           if (texts.length) replyText = texts.join("\n");
+        } else if (seg?.text) {
+          replyText = seg.text;
         }
       }
     } else if (p && p.text) {
@@ -187,14 +204,16 @@ app.post("/api/chat", async (req, res) => {
     if (!replyText && providerResult && providerResult.resp) {
       try {
         const raw = await providerResult.resp.text();
-        if (raw && raw.length) replyText = raw;
+        if (raw && raw.length) {
+          replyText = raw;
+        }
       } catch(e){}
     }
 
     if (!replyText) {
       const detail = providerResult && providerResult.parsed ? (providerResult.parsed.json || providerResult.parsed.text || providerResult.parsed.error || null) : null;
-      db[convId].push({ role:"assistant", content: `Provider error: no content from ${usedProvider}`, created_at: new Date().toISOString(), meta:{ provider: usedProvider, detail }});
-      saveDB(db);
+      db[convId].push({ role:"assistant", content: `Provider error: no content from ${usedProvider}`, created_at: new Date().toISOString(), meta:{ provider: usedProvider, detail }}); saveDB(db);
+      console.log("[chat] providerResult.parsed:", JSON.stringify(providerResult && providerResult.parsed, null, 2));
       return res.status(502).json({ error:"provider_no_content", provider: usedProvider, detail: detail || "no body" });
     }
 
