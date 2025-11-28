@@ -1,6 +1,6 @@
 // backend/server.js
-// Fixed multi-provider proxy (Groq + Gemini).
-// Deploy: set env vars (see README in chat). Restart server after env change.
+// Fixed multi-provider chat proxy with proper Gemini v1 usage and better logging/fallback.
+// Restart server with: node server.js
 
 const express = require("express");
 const cors = require("cors");
@@ -23,12 +23,10 @@ const GROQ_KEY = (process.env.GROQ_KEY || "").trim();
 const GROQ_API_BASE = (process.env.GROQ_API_BASE || "https://api.groq.com/openai/v1").trim();
 const GROQ_MODEL_DEFAULT = (process.env.GROQ_MODEL || "llama-3.1-8b-instant").trim();
 
-// Gemini env
-const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();            // API key (if using key)
-const GEMINI_BEARER = (process.env.GEMINI_BEARER || "").trim();      // Bearer token (if using)
-const GEMINI_MODEL_ID = (process.env.GEMINI_MODEL || "gemini-2.5-pro").trim(); // recommended: gemini-2.5-pro
-const GEMINI_API_BASE = (process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1").trim();
-const GEMINI_USER_PROJECT = (process.env.GEMINI_USER_PROJECT || "").trim(); // optional, billing project id
+const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();
+const GEMINI_MODEL = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
+// Optional project header for billing/quota (set in ENV if needed)
+const GEMINI_PROJECT = (process.env.GEMINI_PROJECT || "").trim();
 
 // Ensure history file exists
 if (!fs.existsSync(DB_PATH)) {
@@ -45,21 +43,25 @@ function saveDB(db) {
 function containsDevanagari(s){ return /[\u0900-\u097F]/.test(s || ""); }
 function sanitizeReply(text){ if(!text) return ""; if(typeof text !== "string") text = String(text); return text.replace(/\s+/g, " ").trim(); }
 
-/** robust fetch + parse **/
-async function fetchAndParse(resp) {
-  const ct = (resp && resp.headers && resp.headers.get("content-type")) || "";
-  const status = resp.status;
-  let text = null;
-  try { text = await resp.text(); } catch(e) { text = null; }
-  // try JSON parse
-  let json = null;
-  try { if (text && text.length) json = JSON.parse(text); } catch(e){ json = null; }
-  return { status, headers: resp.headers.raw ? resp.headers.raw() : {}, text, json };
+async function safeParseResponse(res){
+  if (!res || !res.headers) return { ok:false, text:null };
+  const ct = (res.headers.get && (res.headers.get("content-type") || "").toLowerCase()) || "";
+  try {
+    if (ct.includes("application/json")) {
+      const j = await res.json();
+      return { ok: res.ok, json: j, status: res.status, raw: null };
+    } else {
+      const t = await res.text();
+      try { return { ok: res.ok, json: JSON.parse(t), status: res.status, raw: t }; } catch(e){ return { ok: res.ok, text: t, status: res.status, raw: t }; }
+    }
+  } catch(e){
+    return { ok:false, error:e, text:null };
+  }
 }
 
 /* --- Provider callers --- */
 
-// GROQ wrapper (unchanged)
+// GROQ (OpenAI-compatible)
 async function callGroq(modelId, messagesOrString, opts={}) {
   if (!GROQ_KEY) throw new Error("GROQ_KEY_MISSING");
   const url = `${GROQ_API_BASE}/chat/completions`;
@@ -75,57 +77,52 @@ async function callGroq(modelId, messagesOrString, opts={}) {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${GROQ_KEY}`
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    timeout: 120000
   });
-  const parsed = await fetchAndParse(resp);
-  return { provider:"groq", resp, parsed, requestBody: body };
+  const parsed = await safeParseResponse(resp);
+  return { provider:"groq", resp, parsed };
 }
 
-// Gemini (Generative) call — robust, logs full server response text
+// Gemini (Google Generative API) - using v1 generate endpoint
 async function callGemini(modelId, userMessage, opts={}) {
-  // require gemini key or bearer
-  if (!GEMINI_KEY && !GEMINI_BEARER) throw new Error("GEMINI_KEY_OR_BEARER_MISSING");
+  if (!GEMINI_KEY) throw new Error("GEMINI_KEY_MISSING");
+  // Use v1 endpoint (matches examples): POST https://generativelanguage.googleapis.com/v1/models/{model}:generate?key=API_KEY
+  // modelId should be like "gemini-2.5-flash" (ENV is set to that)
+  const modelPart = encodeURIComponent(modelId);
+  const url = `https://generativelanguage.googleapis.com/v1/models/${modelPart}:generate?key=${encodeURIComponent(GEMINI_KEY)}`;
 
-  // Build URL: use GEMINI_API_BASE and model path
-  // Accept either `v1` or `v1beta2` style base in env. We append `/models/{id}:generate`
-  const base = GEMINI_API_BASE.replace(/\/+$/,"");
-  const pathUrl = `${base}/models/${encodeURIComponent(modelId)}:generate`;
-  // If using API key, append ?key=...
-  const url = GEMINI_KEY ? `${pathUrl}?key=${encodeURIComponent(GEMINI_KEY)}` : pathUrl;
-
-  // Request body according to docs
+  // Build request body according to v1 API: { prompt: { text: "..." }, maxOutputTokens, temperature }
   const body = {
     prompt: { text: String(userMessage) },
-    // allow overriding token size
-    maxOutputTokens: (typeof opts.maxOutputTokens === "number") ? opts.maxOutputTokens : 512,
+    maxOutputTokens: opts.maxOutputTokens || 512,
     temperature: typeof opts.temperature === "number" ? opts.temperature : 0.6
   };
 
-  // Build headers
-  const headers = { "Content-Type": "application/json" };
-  if (GEMINI_BEARER) headers["Authorization"] = `Bearer ${GEMINI_BEARER}`;
-  if (GEMINI_USER_PROJECT) headers["X-Goog-User-Project"] = GEMINI_USER_PROJECT;
+  const headers = {
+    "Content-Type": "application/json"
+  };
+  // Optionally include the X-Goog-User-Project header if provided (helps with billing/quota)
+  if (GEMINI_PROJECT) headers["X-Goog-User-Project"] = GEMINI_PROJECT;
 
-  // Log the outgoing call (useful for debugging)
-  console.log("[callGemini] POST", url, "model:", modelId, "maxOutputTokens:", body.maxOutputTokens);
-  if (GEMINI_USER_PROJECT) console.log("[callGemini] X-Goog-User-Project:", GEMINI_USER_PROJECT);
-  // Do the call
+  // Debug log (will appear in Render logs)
+  console.info("[callGemini] POST", url, "model:", modelId, "maxOutputTokens:", body.maxOutputTokens, "X-Goog-User-Project:", !!GEMINI_PROJECT);
+
   const resp = await fetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify(body),
-    // increase timeout via signal if needed (omitted)
+    timeout: 120000
   });
 
-  const parsed = await fetchAndParse(resp);
-  console.log("[callGemini] status:", parsed.status, "content-type:", resp.headers.get("content-type"));
-  // Log short preview of response for debugging (avoid full huge logs)
-  if (parsed.text && parsed.text.length > 0) {
-    console.log("[callGemini] response-text-preview:", parsed.text.slice(0,2000));
-  } else {
-    console.log("[callGemini] response had empty body or non-text");
+  const parsed = await safeParseResponse(resp);
+
+  // Extra logging when google responds non-200 or returns non-json
+  if (!parsed.ok || (parsed.status && parsed.status >= 400)) {
+    console.warn("[callGemini] non-OK response", { status: parsed.status, json: parsed.json || null, textPreview: parsed.text || parsed.raw || null });
   }
-  return { provider:"gemini", resp, parsed, requestBody: body };
+
+  return { provider:"gemini", resp, parsed };
 }
 
 /* --- Main chat endpoint --- */
@@ -143,7 +140,7 @@ app.post("/api/chat", async (req, res) => {
     db[convId].push({ role:"user", content: message, created_at: new Date().toISOString() });
     saveDB(db);
 
-    // system prompt selection
+    // system prompt: enforce script -> reply in same script
     let systemMsg;
     if (containsDevanagari(message)) {
       systemMsg = { role: "system", content: "You are Indresh 2.0. User used Devanagari Hindi. Reply IN HINDI using Devanagari only. Do NOT repeat the user's question. Keep answers clear and concise." };
@@ -151,14 +148,15 @@ app.post("/api/chat", async (req, res) => {
       systemMsg = { role: "system", content: "You are Indresh 2.0. User used Latin script (Hinglish/English). Reply in the same script. Do NOT repeat the user's question." };
     }
 
+    // choose provider and call
     let providerResult = null;
     let usedProvider = null;
     try {
-      if (modelKey.startsWith("gemini")) {
-        // accept 'gemini_2_5' or direct gemini selection from client; use GEMINI_MODEL_ID from env
+      if (modelKey === "gemini_2_5") {
         usedProvider = "gemini";
-        // callGemini uses GEMINI_MODEL_ID from env by default (we still pass that)
-        providerResult = await callGemini(GEMINI_MODEL_ID, message, { maxOutputTokens: 900, temperature: 0.6 });
+        // prefer Gemini model from ENV
+        providerResult = await callGemini(GEMINI_MODEL, message, { maxOutputTokens: 1200, temperature: 0.6 });
+        // if Gemini returned non-OK or empty, fall through to GROQ fallback below
       } else {
         usedProvider = "groq";
         const targetModel = GROQ_MODEL_DEFAULT;
@@ -172,13 +170,33 @@ app.post("/api/chat", async (req, res) => {
       return res.status(502).json({ error:"provider_exception", provider: usedProvider, detail: String(provErr) });
     }
 
+    // If requested Gemini but got bad/non-JSON response -> attempt fallback to GROQ automatically
+    if (usedProvider === "gemini") {
+      const p = providerResult && providerResult.parsed;
+      if (!p || (p.status && p.status >= 400) || (!p.json && !p.text)) {
+        console.warn("[server] Gemini returned unusable response; falling back to GROQ");
+        // attempt groq fallback
+        try {
+          const targetModel = GROQ_MODEL_DEFAULT;
+          const messagesArr = [ systemMsg, { role:"user", content: message } ];
+          const groqResult = await callGroq(targetModel, messagesArr, { maxOutputTokens: 1400, temperature: 0.6 });
+          providerResult = groqResult;
+          usedProvider = "groq";
+        } catch (gErr) {
+          console.error("Fallback GROQ exception:", gErr);
+          db[convId].push({ role:"assistant", content: `Provider error: fallback failed: ${String(gErr)}`, created_at: new Date().toISOString(), meta:{ error:true }});
+          saveDB(db);
+          return res.status(502).json({ error:"provider_fallback_failed", detail: String(gErr) });
+        }
+      }
+    }
+
     // Parse provider response robustly
     let replyText = null;
     const p = providerResult && providerResult.parsed;
-    // If parsed.json exists, try known shapes
     if (p && p.json) {
       const j = p.json;
-      // Groq/OpenAI-like shapes
+      // Groq / OpenAI-like
       replyText =
         j?.choices?.[0]?.message?.content ||
         j?.choices?.[0]?.text ||
@@ -187,44 +205,40 @@ app.post("/api/chat", async (req, res) => {
         j?.generated_text ||
         (typeof j === "string" ? j : null);
 
-      // Gemini shapes: check `candidates` or `output[]`
-      if (!replyText && j?.candidates && j.candidates[0] && j.candidates[0].content) {
-        // candidate could be object or string
-        const c = j.candidates[0].content;
-        if (typeof c === "string") replyText = c;
-        else if (c?.text) replyText = c.text;
-        else if (Array.isArray(c)) replyText = c.map(x => x.text || x).join(" ");
+      // Gemini v1 shape might be: { candidates: [{ content: "..." }] } or { output: [ { content: [ { text: "..." } ] } ] }
+      if (!replyText && j?.candidates && j.candidates[0] && (j.candidates[0].content || j.candidates[0].output)) {
+        // candidate content can be string or object
+        if (typeof j.candidates[0].content === "string") replyText = j.candidates[0].content;
+        else if (j.candidates[0].content?.[0]?.text) replyText = j.candidates[0].content.map(c => c.text).join("\n");
       }
-      if (!replyText && j?.output && Array.isArray(j.output) && j.output[0] && j.output[0].content) {
+      if (!replyText && j?.output && Array.isArray(j.output) && j.output.length) {
+        // join text segments if present
         const seg = j.output[0].content;
         if (typeof seg === "string") replyText = seg;
         else if (Array.isArray(seg)) {
-          const texts = seg.map(s => (s?.text || (s?.content?.[0]?.text) || "" )).filter(Boolean);
+          const texts = seg.map(s => (s?.text || (s?.content?.[0]?.text) || "")).filter(Boolean);
           if (texts.length) replyText = texts.join("\n");
-        } else if (seg?.text) replyText = seg.text;
+        }
       }
-    }
-
-    // If no parsed json but text present
-    if (!replyText && p && p.text) {
+    } else if (p && p.text) {
       replyText = p.text;
+    } else if (p && p.ok === false && p.error) {
+      replyText = `Provider returned error: ${JSON.stringify(p.error)}`;
     }
 
-    // If still empty, try raw resp.text from providerResult
-    if (!replyText && providerResult && providerResult.parsed && providerResult.parsed.text) {
-      replyText = providerResult.parsed.text;
+    // fallback raw body
+    if (!replyText && providerResult && providerResult.resp) {
+      try {
+        const raw = await providerResult.resp.text();
+        if (raw && raw.length) replyText = raw;
+      } catch(e){}
     }
 
-    // If still empty, include debug dump (so user sees the failure)
     if (!replyText) {
-      const detail = providerResult && providerResult.parsed ? {
-        status: providerResult.parsed.status,
-        headers_preview: providerResult.parsed.headers && Object.keys(providerResult.parsed.headers).slice(0,5),
-        raw_preview: providerResult.parsed.text ? providerResult.parsed.text.slice(0,600) : null
-      } : null;
-      db[convId].push({ role:"assistant", content: `Provider error: no content from ${usedProvider}`, created_at: new Date().toISOString(), meta:{ provider: usedProvider, detail }});
+      const detail = providerResult && providerResult.parsed ? (providerResult.parsed.json || providerResult.parsed.text || providerResult.parsed.error || null) : null;
+      db[convId].push({ role:"assistant", content: `Provider error: no content from ${usedProvider}`, created_at: new Date().toISOString(), meta:{ provider: usedProvider, detail }} );
       saveDB(db);
-      return res.status(502).json({ error:"provider_no_content", provider: usedProvider, detail });
+      return res.status(502).json({ error:"provider_no_content", provider: usedProvider, detail: detail || "no body" });
     }
 
     // sanitize + replace mentions
@@ -267,10 +281,8 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   console.log("GROQ_API_BASE:", GROQ_API_BASE);
   console.log("GROQ_MODEL_DEFAULT:", GROQ_MODEL_DEFAULT);
   console.log("GEMINI_KEY:", GEMINI_KEY ? "SET len="+GEMINI_KEY.length : "MISSING");
-  console.log("GEMINI_BEARER:", GEMINI_BEARER ? "SET len="+GEMINI_BEARER.length : "MISSING");
-  console.log("GEMINI_API_BASE:", GEMINI_API_BASE);
-  console.log("GEMINI_MODEL:", GEMINI_MODEL_ID);
-  if (GEMINI_USER_PROJECT) console.log("GEMINI_USER_PROJECT:", GEMINI_USER_PROJECT);
+  console.log("GEMINI_MODEL:", GEMINI_MODEL);
+  if (GEMINI_PROJECT) console.log("GEMINI_PROJECT set:", GEMINI_PROJECT);
 });
 
 process.on("SIGINT", () => { console.log("Shutting down..."); server.close(()=>process.exit(0)); });
