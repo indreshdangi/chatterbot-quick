@@ -1,5 +1,5 @@
 // backend/server.js
-// HARDCODED MODE: No detection time. Direct hit to the specific model.
+// GOD MODE: Uses 'Gemini 3 Pro Preview' (The Latest & Most Powerful) 💎
 
 const express = require("express");
 const cors = require("cors");
@@ -17,19 +17,17 @@ const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
-// --- 🎯 SETTING: CHOOSE YOUR FIGHTER ---
+// --- 🎯 TARGET: THE BEAST (GEMINI 3) ---
+const TARGET_MODEL = "gemini-3-pro-preview"; 
 
-// OPTION 1: POWERHOUSE (Ye wahi hai jo aapko pasand aaya tha)
-const TARGET_MODEL = "gemini-2.5-pro-preview-03-25"; 
-
-// OPTION 2: SPEEDSTER (Agar kabhi try karna ho to upar wala hata ke isse uncomment karna)
-// const TARGET_MODEL = "gemini-1.5-flash-latest";
+// Backup: Agar 3.0 abhi API par active na ho, to 2.5 Pro chalega
+const BACKUP_MODEL = "gemini-2.5-pro-preview-03-25";
 
 const SYSTEM_INSTRUCTION = `
-You are Indresh 2.0, an expert AI assistant.
-1. QUALITY: Provide extensive, highly detailed, and intellectually superior responses.
-2. TONE: Professional yet engaging (Hindi/Hinglish).
-3. FORMATTING: Use deep markdown structuring (Headings, Bold, Bullet points).
+You are Indresh 2.0, an advanced AI powered by Gemini 3.
+1. INTELLIGENCE: Use your SOTA reasoning to provide the best possible answers.
+2. TONE: Professional, Smart, and Engaging (Hindi/Hinglish).
+3. FORMAT: Use clean Markdown (Bold, Lists, Headings).
 `;
 
 app.post("/api/chat", async (req, res) => {
@@ -38,7 +36,7 @@ app.post("/api/chat", async (req, res) => {
   if (!genAI) return res.json({ output: { role: "assistant", content: "❌ Error: API Key Missing" } });
 
   try {
-      // console.log(`🚀 Direct Hit: [ ${TARGET_MODEL} ]`);
+      console.log(`💎 Attempting GOD MODE: [ ${TARGET_MODEL} ]`);
       
       const model = genAI.getGenerativeModel({ 
           model: TARGET_MODEL,
@@ -47,24 +45,19 @@ app.post("/api/chat", async (req, res) => {
 
       const result = await model.generateContent(message);
       const response = await result.response;
-      const replyText = response.text();
-
-      return res.json({ output: { role: "assistant", content: replyText, via: `Gemini (${TARGET_MODEL})` } });
+      return res.json({ output: { role: "assistant", content: response.text(), via: `Gemini 3 Pro (New)` } });
 
   } catch (error) {
-      console.error(`Error with ${TARGET_MODEL}:`, error.message);
+      console.error(`Gemini 3 Failed (${error.message}), switching to 2.5 Pro...`);
       
-      // Agar kisi karan 2.5 fail ho jaye, to automatically Flash Latest try karega (Backup)
-      if(TARGET_MODEL.includes("2.5")) {
-          try {
-              console.log("⚠️ 2.5 Pro busy, falling back to Flash Latest...");
-              const backupModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
-              const backupResult = await backupModel.generateContent(message);
-              return res.json({ output: { role: "assistant", content: backupResult.response.text(), via: "Gemini Flash (Backup)" } });
-          } catch(e) {}
+      // FALLBACK TO 2.5 PRO (Jo pehle chal raha tha)
+      try {
+          const backupModel = genAI.getGenerativeModel({ model: BACKUP_MODEL, systemInstruction: SYSTEM_INSTRUCTION });
+          const backupResult = await backupModel.generateContent(message);
+          return res.json({ output: { role: "assistant", content: backupResult.response.text(), via: "Gemini 2.5 Pro (Backup)" } });
+      } catch(e) {
+          return res.json({ output: { role: "assistant", content: `❌ Server Error: ${e.message}` } });
       }
-
-      return res.json({ output: { role: "assistant", content: `❌ Server Error: ${error.message}` } });
   }
 });
 
