@@ -1,6 +1,5 @@
 // backend/server.js
-// DUAL ENGINE: Gemini 2.5 Pro (Smart) + Llama 3.1 (Fast)
-// No detection. Direct hardcoded connections.
+// UPGRADED BRAIN: Memory Support + Concise Answers + History Handling
 
 const express = require("express");
 const cors = require("cors");
@@ -16,53 +15,66 @@ app.use(express.json({ limit: "10mb" }));
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
 
-// --- API KEYS ---
 const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();
 const GROQ_KEY = (process.env.GROQ_KEY || "").trim();
 
-// --- HARDCODED MODELS ---
-const MODEL_GEMINI = "gemini-2.5-pro-preview-03-25"; // SMART & POWERFUL
-const MODEL_GROQ = "llama-3.1-8b-instant";         // SUPER FAST
+const MODEL_GEMINI = "gemini-2.5-pro-preview-03-25"; 
+const MODEL_GROQ = "llama-3.1-8b-instant";        
 
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
+// --- STRICT SYSTEM INSTRUCTION (Bakwas Band, Kaam Chalu) ---
 const SYSTEM_INSTRUCTION = `
-You are Indresh 2.0, an expert AI assistant.
-1. FORMAT: Use Markdown (Bold, Lists) clearly.
-2. TONE: Professional, Helpful, and Friendly (Hindi/Hinglish).
+You are Indresh 2.0, a smart AI assistant.
+1. CONCISE: Keep answers short and direct unless asked for details.
+2. TONE: Natural, conversational (Mix of Hindi/English like a human friend).
+3. FORMAT: Use Markdown (Bold, Lists) but avoid excessive formatting for small talks.
+4. MEMORY: Use the provided conversation history to answer contextually.
 `;
 
 app.post("/api/chat", async (req, res) => {
-  const message = req.body.message || "";
-  // Frontend se "gemini" ya "groq" aayega
-  const requestedModel = (req.body.model || "gemini").toLowerCase(); 
-  
+  const { message, history, model } = req.body; // Ab hum history bhi receive karenge
+  const requestedModel = (model || "groq").toLowerCase(); 
+
   try {
     // ==========================================
-    // OPTION 1: GEMINI (Smart Mode)
+    // OPTION 1: GEMINI (Powerful)
     // ==========================================
     if (requestedModel.includes("gemini")) {
         if (!genAI) return res.json({ output: { role: "assistant", content: "❌ Error: Gemini Key Missing" } });
 
-        // console.log(`🧠 Using Gemini: ${MODEL_GEMINI}`);
-        
-        const model = genAI.getGenerativeModel({ 
+        const geminiModel = genAI.getGenerativeModel({ 
             model: MODEL_GEMINI,
             systemInstruction: SYSTEM_INSTRUCTION 
         });
 
-        const result = await model.generateContent(message);
+        // History format convert karna padega Gemini ke liye
+        const chatHistory = (history || []).map(msg => ({
+            role: msg.role === "user" ? "user" : "model",
+            parts: [{ text: msg.content }]
+        }));
+
+        const chat = geminiModel.startChat({
+            history: chatHistory
+        });
+
+        const result = await chat.sendMessage(message);
         const response = await result.response;
-        return res.json({ output: { role: "assistant", content: response.text(), via: "Gemini 2.5 Pro (Smart)" } });
+        return res.json({ output: { role: "assistant", content: response.text(), via: "2.5 Pro (Powerful)" } });
     } 
     
     // ==========================================
-    // OPTION 2: GROQ / LLAMA (Fast Mode)
+    // OPTION 2: GROQ (Fast - DEFAULT)
     // ==========================================
     else {
         if (!GROQ_KEY) return res.json({ output: { role: "assistant", content: "❌ Error: Groq Key Missing" } });
 
-        // console.log(`⚡ Using Groq: ${MODEL_GROQ}`);
+        // History prepare karo Groq ke liye
+        const messages = [
+            { role: "system", content: SYSTEM_INSTRUCTION },
+            ...(history || []), // Purani baatein
+            { role: "user", content: message } // Abhi ki baat
+        ];
 
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
@@ -72,17 +84,15 @@ app.post("/api/chat", async (req, res) => {
             },
             body: JSON.stringify({
                 model: MODEL_GROQ,
-                messages: [
-                    { role: "system", content: SYSTEM_INSTRUCTION },
-                    { role: "user", content: message }
-                ],
-                temperature: 0.7
+                messages: messages,
+                temperature: 0.6, // Thoda creative kam, accurate zyada
+                max_tokens: 1024  // Limit lagayi taaki bada essay na likhe
             })
         });
 
         const data = await response.json();
         const reply = data.choices?.[0]?.message?.content || "Error from Groq";
-        return res.json({ output: { role: "assistant", content: reply, via: "Llama 3.1 (Fast)" } });
+        return res.json({ output: { role: "assistant", content: reply, via: "3.1 8b (Fast)" } });
     }
 
   } catch (error) {
