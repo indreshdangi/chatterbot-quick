@@ -1,5 +1,6 @@
 // backend/server.js
-// PRIORITY: POWER & INTELLIGENCE (PRO MODEL FIRST)
+// ULTIMATE BALANCE: Uses 'Gemini 2.0 Flash Experimental'
+// (Pro Intelligence + Flash Speed)
 
 const express = require("express");
 const cors = require("cors");
@@ -16,60 +17,56 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
 
 const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();
-const GROQ_KEY = (process.env.GROQ_KEY || "").trim();
 
 let ACTIVE_GEMINI_MODEL = null;
 
-// --- 1. INTELLIGENT MODEL FINDER ---
+// --- 1. THE "BEST OF BOTH WORLDS" FINDER ---
 async function findValidGeminiModel() {
   if (!GEMINI_KEY) return null;
   try {
-    console.log("🔍 Checking Google Models for INTELLIGENCE...");
+    console.log("🔍 Looking for Gemini 2.0 Flash (Experimental)...");
     const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_KEY}`;
     const resp = await fetch(url);
     const data = await resp.json();
 
     if (data.models) {
-      // Priority 1: PRO Models (सबसे समझदार और पावरफुल)
-      // हम 1.5 Pro को पहले ढूंढेंगे क्योंकि वो स्टेबल और बेस्ट है
-      let bestModel = data.models.find(m => m.name.includes("1.5-pro") && !m.name.includes("vision"));
+      // PRIORITY 1: GEMINI 2.0 FLASH EXPERIMENTAL (Fast + Smartest)
+      let bestModel = data.models.find(m => m.name.includes("2.0-flash-exp"));
       
-      // Priority 2: 2.5 Preview (अगर Pro नहीं मिला तो लेटेस्ट प्रीव्यू)
+      // PRIORITY 2: GEMINI 1.5 PRO (Smart Backup)
       if (!bestModel) {
-          bestModel = data.models.find(m => m.name.includes("preview") && m.name.includes("pro"));
+          console.log("⚠️ 2.0 Flash not found, looking for 1.5 Pro...");
+          bestModel = data.models.find(m => m.name.includes("1.5-pro") && !m.name.includes("vision"));
       }
 
-      // Priority 3: Fallback to Flash (अगर कुछ नहीं मिला)
+      // PRIORITY 3: GEMINI 1.5 FLASH (Speed Backup)
       if (!bestModel) {
-          bestModel = data.models.find(m => m.name.includes("flash"));
+          bestModel = data.models.find(m => m.name.includes("1.5-flash"));
       }
 
       if (bestModel) {
         ACTIVE_GEMINI_MODEL = bestModel.name.replace("models/", "");
-        console.log(`✅ SELECTED POWERFUL MODEL: [ ${ACTIVE_GEMINI_MODEL} ] 🧠`);
+        console.log(`✅ LOCKED MODEL: [ ${ACTIVE_GEMINI_MODEL} ] 🔥`);
         return ACTIVE_GEMINI_MODEL;
       }
     }
   } catch (e) { console.error("Model check failed:", e.message); }
   
-  // Default Fallback
-  ACTIVE_GEMINI_MODEL = "gemini-1.5-pro"; 
+  // Hard fallback agar list fail ho jaye
+  ACTIVE_GEMINI_MODEL = "gemini-2.0-flash-exp"; 
   return ACTIVE_GEMINI_MODEL;
 }
 
 findValidGeminiModel();
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
-// --- SYSTEM PROMPT (INDRESH 2.0 PERSONALITY) ---
+// --- SYSTEM PROMPT ---
 const SYSTEM_INSTRUCTION = `
-You are Indresh 2.0, an advanced and intelligent AI assistant. 
-Your Goal: Provide detailed, accurate, and high-quality responses.
-Language: Use a natural mix of Hindi and English (Hinglish). Talk like a smart, friendly expert.
-Formatting: 
-- ALWAYS use Markdown. 
-- Use **Bold** for headings and key points. 
-- Use lists (bullet points) for steps.
-- Do NOT produce dense walls of text. Break paragraphs.
+You are Indresh 2.0, a highly advanced AI assistant powered by Gemini 2.0.
+1. SPEED: Be concise but detailed.
+2. FORMAT: Use Markdown (Bold headings, bullet points) beautifully.
+3. TONE: Intelligent, Professional yet Friendly (Hinglish supported).
+4. ACCURACY: Provide the latest and most logical information.
 `;
 
 app.post("/api/chat", async (req, res) => {
@@ -82,6 +79,7 @@ app.post("/api/chat", async (req, res) => {
 
     // GEMINI LOGIC
     if (genAI) {
+      // Ensure we use the correct model string
       const model = genAI.getGenerativeModel({ 
           model: ACTIVE_GEMINI_MODEL,
           systemInstruction: SYSTEM_INSTRUCTION 
@@ -98,6 +96,17 @@ app.post("/api/chat", async (req, res) => {
     return res.json({ output: { role: "assistant", content: replyText, via: via } });
 
   } catch (error) {
+    // Agar 2.0 Model fail ho jaye (kyunki experimental hai), to Pro par fallback karo
+    if(error.message.includes("404") || error.message.includes("not found")) {
+        console.log("⚠️ 2.0 Failed, retrying with 1.5 Pro...");
+        try {
+            const fallbackModel = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+            const result = await fallbackModel.generateContent(message);
+            return res.json({ output: { role: "assistant", content: result.response.text(), via: "Gemini (Fallback 1.5 Pro)" } });
+        } catch(e) {
+            return res.json({ output: { role: "assistant", content: `Error: ${e.message}` } });
+        }
+    }
     return res.json({ output: { role: "assistant", content: `❌ Error: ${error.message}` } });
   }
 });
