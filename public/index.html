@@ -3,19 +3,24 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Indresh 2.0 — AI Assistant</title>
-  
+  <title>Indresh 2.0 — Dual AI</title>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-
   <style>
     :root{ --bg:#0d0d15; --panel:#161622; --user:#2a2a3a; --ai:#1e1e2e; --text:#f0f0f0; --accent:#e0a0ff; --border:rgba(255,255,255,0.06); }
     body{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; justify-content:center; align-items:center; margin:0;}
+    
     .card{width:100%; max-width:900px; height:100vh; background:var(--panel); display:flex; flex-direction:column; overflow:hidden;}
     @media(min-width: 600px) { .card { height: 90vh; border-radius: 16px; border: 1px solid var(--border); } }
 
     .header{padding:15px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2);}
-    .logo{font-weight:800; font-size:18px; color:var(--accent);}
+    .logo{font-weight:800; font-size:18px; color:var(--accent); display:flex; align-items:center; gap:10px;}
     
+    /* MODEL SELECTOR DESIGN */
+    select {
+        background: var(--user); color: var(--text); border: 1px solid var(--border);
+        padding: 5px 10px; border-radius: 8px; outline: none; cursor: pointer; font-weight: bold;
+    }
+
     .messages{flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:20px;}
     .msg{max-width:85%; line-height:1.6; font-size: 15px;}
     .msg.user{align-self:flex-end;}
@@ -25,13 +30,12 @@
     .msg.user .bubble{background:var(--user); color:var(--text); border-bottom-right-radius:2px;}
     .msg.ai .bubble{background:var(--ai); border:1px solid var(--border); border-bottom-left-radius:2px;}
 
-    /* --- SUNDAR FORMATTING STYLES --- */
+    /* Markdown Styles */
     .bubble h1, .bubble h2, .bubble h3 { font-weight: 700; color: var(--accent); margin-top: 10px; margin-bottom: 5px; font-size: 1.1em; }
     .bubble strong { color: #fff; font-weight: 700; }
     .bubble p { margin-bottom: 8px; }
     .bubble ul, .bubble ol { margin-left: 20px; margin-bottom: 10px; }
-    .bubble li { margin-bottom: 4px; }
-    .bubble code { background: rgba(255,255,255,0.1); padding: 2px 5px; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
+    .bubble code { background: rgba(255,255,255,0.1); padding: 2px 5px; border-radius: 4px; font-family: monospace; }
     .bubble pre { background: #000; padding: 10px; border-radius: 8px; overflow-x: auto; margin-top: 5px; }
 
     .footer{padding:15px; border-top:1px solid var(--border); display:flex; gap:10px; background:var(--panel);}
@@ -42,16 +46,22 @@
 <body>
   <div class="card">
     <div class="header">
-      <div class="logo">⚡ INDRESH 2.0</div>
-      <div style="font-size:12px; opacity:0.7;" id="model-display">Connecting...</div>
+      <div class="logo">
+          ⚡ INDRESH 2.0
+      </div>
+      
+      <select id="modelSelect">
+          <option value="gemini">Gemini 2.5 Pro (Smart 🧠)</option>
+          <option value="groq">Llama 3.1 (Fast ⚡)</option>
+      </select>
     </div>
 
     <div class="messages" id="messages">
-      <div class="msg ai"><div class="bubble">नमस्ते! मैं Indresh 2.0 हूँ। मैं आपकी कैसे मदद कर सकता हूँ?</div></div>
+      <div class="msg ai"><div class="bubble">नमस्ते! मैं Indresh 2.0 हूँ। आप ऊपर से मॉडल चुन सकते हैं।</div></div>
     </div>
 
     <div class="footer">
-      <input id="input" type="text" placeholder="Type a message..." autofocus>
+      <input id="input" type="text" placeholder="Message..." autofocus>
       <button id="sendBtn">Send</button>
     </div>
   </div>
@@ -60,29 +70,28 @@
   const msgs = document.getElementById('messages');
   const inp = document.getElementById('input');
   const btn = document.getElementById('sendBtn');
-  const modelDisp = document.getElementById('model-display');
+  const selector = document.getElementById('modelSelect');
   
-  // Setup Marked options (Line breaks enable)
   marked.use({ breaks: true });
-
-  const convId = localStorage.getItem('convId') || Date.now().toString();
-  localStorage.setItem('convId', convId);
+  const convId = Date.now().toString();
 
   function addMsg(role, text, via) {
     const div = document.createElement('div');
     div.className = 'msg ' + role;
-    
     const bubble = document.createElement('div');
     bubble.className = 'bubble';
     
-    // YEH LINE JADU KAREGI (Format Text)
     if(role === 'ai') {
         bubble.innerHTML = marked.parse(text); 
-        if(via) modelDisp.textContent = "Powered by " + via;
+        if(via) {
+            const tiny = document.createElement('div');
+            tiny.style.fontSize='10px'; tiny.style.opacity='0.6'; tiny.style.marginTop='5px'; tiny.style.textAlign='right';
+            tiny.innerText = "Via: " + via;
+            bubble.appendChild(tiny);
+        }
     } else {
         bubble.textContent = text;
     }
-    
     div.appendChild(bubble);
     msgs.appendChild(div);
     msgs.scrollTop = msgs.scrollHeight;
@@ -92,6 +101,9 @@
     const txt = inp.value.trim();
     if(!txt) return;
     
+    // Check which model user selected
+    const selectedModel = selector.value;
+
     addMsg('user', txt);
     inp.value = '';
     
@@ -105,7 +117,8 @@
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ message: txt, conversation_id: convId, model: "gemini" }) 
+        // Send model choice to backend
+        body: JSON.stringify({ message: txt, conversation_id: convId, model: selectedModel }) 
       });
       
       const data = await res.json();
