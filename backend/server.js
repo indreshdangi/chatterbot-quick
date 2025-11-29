@@ -1,6 +1,5 @@
 // backend/server.js
-// MEMORY LOCKED VERSION: Checks once, remembers forever.
-// Priority: 2.0 Flash (Speed) -> 2.5 Pro (Power) -> 1.5 Pro (Backup)
+// HARDCODED MODE: No detection time. Direct hit to the specific model.
 
 const express = require("express");
 const cors = require("cors");
@@ -18,23 +17,19 @@ const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
-// --- GLOBAL VARIABLE (YADDAASH) ---
-// Ek bar model mil gaya to yahan save ho jayega.
-let LOCKED_MODEL_NAME = null;
+// --- 🎯 SETTING: CHOOSE YOUR FIGHTER ---
 
-// Is list me se jo sabse pehle chalega, wo final ho jayega.
-const MODELS_TO_TRY = [
-    "gemini-2.0-flash-exp",          // 1. Super Fast + Smart (Newest)
-    "gemini-2.5-pro-preview-03-25",  // 2. Your Current Best (Heavy Power)
-    "gemini-1.5-pro",                // 3. Stable Backup
-    "gemini-1.5-flash"               // 4. Emergency Speed
-];
+// OPTION 1: POWERHOUSE (Ye wahi hai jo aapko pasand aaya tha)
+const TARGET_MODEL = "gemini-2.5-pro-preview-03-25"; 
+
+// OPTION 2: SPEEDSTER (Agar kabhi try karna ho to upar wala hata ke isse uncomment karna)
+// const TARGET_MODEL = "gemini-1.5-flash-latest";
 
 const SYSTEM_INSTRUCTION = `
-You are Indresh 2.0, an advanced AI assistant.
-1. FORMAT: Use Markdown (Bold, Lists) clearly.
-2. TONE: Professional, Helpful, and Friendly (Hindi/Hinglish).
-3. GOAL: Provide accurate and detailed information quickly.
+You are Indresh 2.0, an expert AI assistant.
+1. QUALITY: Provide extensive, highly detailed, and intellectually superior responses.
+2. TONE: Professional yet engaging (Hindi/Hinglish).
+3. FORMATTING: Use deep markdown structuring (Headings, Bold, Bullet points).
 `;
 
 app.post("/api/chat", async (req, res) => {
@@ -42,38 +37,35 @@ app.post("/api/chat", async (req, res) => {
   
   if (!genAI) return res.json({ output: { role: "assistant", content: "❌ Error: API Key Missing" } });
 
-  // ⚡ STEP 1: Agar model pehle se yaad hai, to direct use karo (No Checking)
-  if (LOCKED_MODEL_NAME) {
-      try {
-          // console.log(`🚀 Using Cached Model: ${LOCKED_MODEL_NAME}`); // Logs kam karne ke liye comment kar sakte hain
-          const model = genAI.getGenerativeModel({ model: LOCKED_MODEL_NAME, systemInstruction: SYSTEM_INSTRUCTION });
-          const result = await model.generateContent(message);
-          return res.json({ output: { role: "assistant", content: result.response.text(), via: `Gemini (${LOCKED_MODEL_NAME}) ⚡` } });
-      } catch (e) {
-          console.warn(`⚠️ Cached model failed, retrying search...`);
-          LOCKED_MODEL_NAME = null; // Agar fail hua to bhool jao aur fir se dhundo
-      }
-  }
+  try {
+      // console.log(`🚀 Direct Hit: [ ${TARGET_MODEL} ]`);
+      
+      const model = genAI.getGenerativeModel({ 
+          model: TARGET_MODEL,
+          systemInstruction: SYSTEM_INSTRUCTION 
+      });
 
-  // 🔍 STEP 2: Agar model yaad nahi hai (First Time), to dhundo
-  for (const modelName of MODELS_TO_TRY) {
-      try {
-          console.log(`🕵️ Testing Model: [ ${modelName} ]`);
-          const model = genAI.getGenerativeModel({ model: modelName, systemInstruction: SYSTEM_INSTRUCTION });
-          const result = await model.generateContent(message);
-          
-          // Agar success hua:
-          console.log(`✅ LOCKING MODEL: ${modelName}`);
-          LOCKED_MODEL_NAME = modelName; // <--- YAHAN LOCK HUA
-          
-          return res.json({ output: { role: "assistant", content: result.response.text(), via: `Gemini (${modelName})` } });
-      } catch (error) {
-          // Fail hua to agla try karo
-          // console.log(`Skipping ${modelName}...`);
-      }
-  }
+      const result = await model.generateContent(message);
+      const response = await result.response;
+      const replyText = response.text();
 
-  return res.json({ output: { role: "assistant", content: "❌ Server Busy: Please try again." } });
+      return res.json({ output: { role: "assistant", content: replyText, via: `Gemini (${TARGET_MODEL})` } });
+
+  } catch (error) {
+      console.error(`Error with ${TARGET_MODEL}:`, error.message);
+      
+      // Agar kisi karan 2.5 fail ho jaye, to automatically Flash Latest try karega (Backup)
+      if(TARGET_MODEL.includes("2.5")) {
+          try {
+              console.log("⚠️ 2.5 Pro busy, falling back to Flash Latest...");
+              const backupModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+              const backupResult = await backupModel.generateContent(message);
+              return res.json({ output: { role: "assistant", content: backupResult.response.text(), via: "Gemini Flash (Backup)" } });
+          } catch(e) {}
+      }
+
+      return res.json({ output: { role: "assistant", content: `❌ Server Error: ${error.message}` } });
+  }
 });
 
 if (require("fs").existsSync(PUBLIC_DIR)) {
