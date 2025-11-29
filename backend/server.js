@@ -1,6 +1,5 @@
 // backend/server.js
-// SPEED KING: Uses 'Gemini 1.5 Flash Latest' ⚡
-// Best balance of Speed, Cost, and Quality for Chatbots.
+// TARGET: 'Gemini 1.5 Flash-002' (The REAL name of Flash Latest) ⚡
 
 const express = require("express");
 const cors = require("cors");
@@ -18,17 +17,15 @@ const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
-// --- 🎯 TARGET: FLASH LATEST ---
-// Ye model Pro se thoda kam powerful hai, lekin insan ko fark pata nahi chalta.
-// Speed: 10x Faster than Pro. Cost: Very Low.
-const TARGET_MODEL = "gemini-1.5-flash-latest"; 
+// --- 🎯 REAL NAME OF FLASH LATEST ---
+// Website par iska naam "Flash Latest" hai, lekin API me "002" hai.
+const TARGET_MODEL = "gemini-1.5-flash-002"; 
 
 const SYSTEM_INSTRUCTION = `
-You are Indresh 2.0, a highly efficient and fast AI assistant.
-1. SPEED: Do not lag. Respond instantly.
-2. QUALITY: Provide accurate, well-structured answers in Hindi/Hinglish.
-3. FORMATTING: Use Markdown (Bold, Lists, Paragraphs) effectively.
-4. PERSONALITY: Helpful, Polite, and Intelligent.
+You are Indresh 2.0, a super-fast AI assistant.
+1. SPEED: Respond instantly.
+2. ACCURACY: Provide the latest info.
+3. FORMAT: Clean Markdown (Bold, Lists).
 `;
 
 app.post("/api/chat", async (req, res) => {
@@ -37,7 +34,7 @@ app.post("/api/chat", async (req, res) => {
   if (!genAI) return res.json({ output: { role: "assistant", content: "❌ Error: API Key Missing" } });
 
   try {
-      // console.log(`⚡ Speed Mode: [ ${TARGET_MODEL} ]`);
+      // console.log(`⚡ Using Real Flash Latest: [ ${TARGET_MODEL} ]`);
       
       const model = genAI.getGenerativeModel({ 
           model: TARGET_MODEL,
@@ -46,15 +43,19 @@ app.post("/api/chat", async (req, res) => {
 
       const result = await model.generateContent(message);
       const response = await result.response;
-      
-      // Flash kabhi-kabhi response block kar deta hai agar safety high ho
-      // Isliye hum safety settings default rakhenge
-      
-      return res.json({ output: { role: "assistant", content: response.text(), via: `Gemini Flash ⚡` } });
+      return res.json({ output: { role: "assistant", content: response.text(), via: `Gemini Flash Latest (002)` } });
 
   } catch (error) {
-      console.error(`Flash Error: ${error.message}`);
-      return res.json({ output: { role: "assistant", content: `❌ Server Error: ${error.message}` } });
+      console.error(`Flash 002 Error: ${error.message}`);
+      
+      // Agar 002 kisi wajah se na chale, to standard Flash try karega
+      try {
+          const fallback = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+          const res2 = await fallback.generateContent(message);
+          return res.json({ output: { role: "assistant", content: res2.response.text(), via: "Gemini Flash (Backup)" } });
+      } catch(e) {
+          return res.json({ output: { role: "assistant", content: `❌ Server Error: ${error.message}` } });
+      }
   }
 });
 
