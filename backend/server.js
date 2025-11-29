@@ -1,5 +1,6 @@
 // backend/server.js
-// GOD MODE: Uses 'Gemini 3 Pro Preview' (The Latest & Most Powerful) 💎
+// SPEED KING: Uses 'Gemini 1.5 Flash Latest' ⚡
+// Best balance of Speed, Cost, and Quality for Chatbots.
 
 const express = require("express");
 const cors = require("cors");
@@ -17,17 +18,17 @@ const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
-// --- 🎯 TARGET: THE BEAST (GEMINI 3) ---
-const TARGET_MODEL = "gemini-3-pro-preview"; 
-
-// Backup: Agar 3.0 abhi API par active na ho, to 2.5 Pro chalega
-const BACKUP_MODEL = "gemini-2.5-pro-preview-03-25";
+// --- 🎯 TARGET: FLASH LATEST ---
+// Ye model Pro se thoda kam powerful hai, lekin insan ko fark pata nahi chalta.
+// Speed: 10x Faster than Pro. Cost: Very Low.
+const TARGET_MODEL = "gemini-1.5-flash-latest"; 
 
 const SYSTEM_INSTRUCTION = `
-You are Indresh 2.0, an advanced AI powered by Gemini 3.
-1. INTELLIGENCE: Use your SOTA reasoning to provide the best possible answers.
-2. TONE: Professional, Smart, and Engaging (Hindi/Hinglish).
-3. FORMAT: Use clean Markdown (Bold, Lists, Headings).
+You are Indresh 2.0, a highly efficient and fast AI assistant.
+1. SPEED: Do not lag. Respond instantly.
+2. QUALITY: Provide accurate, well-structured answers in Hindi/Hinglish.
+3. FORMATTING: Use Markdown (Bold, Lists, Paragraphs) effectively.
+4. PERSONALITY: Helpful, Polite, and Intelligent.
 `;
 
 app.post("/api/chat", async (req, res) => {
@@ -36,7 +37,7 @@ app.post("/api/chat", async (req, res) => {
   if (!genAI) return res.json({ output: { role: "assistant", content: "❌ Error: API Key Missing" } });
 
   try {
-      console.log(`💎 Attempting GOD MODE: [ ${TARGET_MODEL} ]`);
+      // console.log(`⚡ Speed Mode: [ ${TARGET_MODEL} ]`);
       
       const model = genAI.getGenerativeModel({ 
           model: TARGET_MODEL,
@@ -45,19 +46,15 @@ app.post("/api/chat", async (req, res) => {
 
       const result = await model.generateContent(message);
       const response = await result.response;
-      return res.json({ output: { role: "assistant", content: response.text(), via: `Gemini 3 Pro (New)` } });
+      
+      // Flash kabhi-kabhi response block kar deta hai agar safety high ho
+      // Isliye hum safety settings default rakhenge
+      
+      return res.json({ output: { role: "assistant", content: response.text(), via: `Gemini Flash ⚡` } });
 
   } catch (error) {
-      console.error(`Gemini 3 Failed (${error.message}), switching to 2.5 Pro...`);
-      
-      // FALLBACK TO 2.5 PRO (Jo pehle chal raha tha)
-      try {
-          const backupModel = genAI.getGenerativeModel({ model: BACKUP_MODEL, systemInstruction: SYSTEM_INSTRUCTION });
-          const backupResult = await backupModel.generateContent(message);
-          return res.json({ output: { role: "assistant", content: backupResult.response.text(), via: "Gemini 2.5 Pro (Backup)" } });
-      } catch(e) {
-          return res.json({ output: { role: "assistant", content: `❌ Server Error: ${e.message}` } });
-      }
+      console.error(`Flash Error: ${error.message}`);
+      return res.json({ output: { role: "assistant", content: `❌ Server Error: ${error.message}` } });
   }
 });
 
