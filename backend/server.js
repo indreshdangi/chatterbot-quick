@@ -1,5 +1,6 @@
 // backend/server.js
-// STABLE VERSION: Prioritizes working models & Fixes 'message is not defined' crash.
+// MEMORY LOCKED VERSION: Checks once, remembers forever.
+// Priority: 2.0 Flash (Speed) -> 2.5 Pro (Power) -> 1.5 Pro (Backup)
 
 const express = require("express");
 const cors = require("cors");
@@ -17,55 +18,62 @@ const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
-// --- MODEL PRIORITY LIST ---
-// Hum bari-bari se inhe try karenge. Jo chalega, wo daudega.
+// --- GLOBAL VARIABLE (YADDAASH) ---
+// Ek bar model mil gaya to yahan save ho jayega.
+let LOCKED_MODEL_NAME = null;
+
+// Is list me se jo sabse pehle chalega, wo final ho jayega.
 const MODELS_TO_TRY = [
-    "gemini-2.5-pro-preview-03-25", // Priority 1: The one that worked for you!
-    "gemini-1.5-pro",               // Priority 2: Standard Pro
-    "gemini-1.5-flash"              // Priority 3: Fast Backup
+    "gemini-2.0-flash-exp",          // 1. Super Fast + Smart (Newest)
+    "gemini-2.5-pro-preview-03-25",  // 2. Your Current Best (Heavy Power)
+    "gemini-1.5-pro",                // 3. Stable Backup
+    "gemini-1.5-flash"               // 4. Emergency Speed
 ];
 
 const SYSTEM_INSTRUCTION = `
-You are Indresh 2.0, an expert AI assistant.
-1. QUALITY: Provide extensive, highly detailed, and intellectually superior responses.
-2. TONE: Professional yet engaging (Hindi/Hinglish).
-3. FORMATTING: Use deep markdown structuring (Headings, Bold, Bullet points).
+You are Indresh 2.0, an advanced AI assistant.
+1. FORMAT: Use Markdown (Bold, Lists) clearly.
+2. TONE: Professional, Helpful, and Friendly (Hindi/Hinglish).
+3. GOAL: Provide accurate and detailed information quickly.
 `;
 
 app.post("/api/chat", async (req, res) => {
-  // FIX: Message variable defined OUTSIDE try block so Catch can use it.
   const message = req.body.message || "";
   
-  if (!genAI) {
-      return res.json({ output: { role: "assistant", content: "❌ Error: API Key Missing" } });
-  }
+  if (!genAI) return res.json({ output: { role: "assistant", content: "❌ Error: API Key Missing" } });
 
-  // Loop through models until one works
-  for (const modelName of MODELS_TO_TRY) {
+  // ⚡ STEP 1: Agar model pehle se yaad hai, to direct use karo (No Checking)
+  if (LOCKED_MODEL_NAME) {
       try {
-          console.log(`🤖 Attempting Model: [ ${modelName} ]`);
-          
-          const model = genAI.getGenerativeModel({ 
-              model: modelName,
-              systemInstruction: SYSTEM_INSTRUCTION 
-          });
-
+          // console.log(`🚀 Using Cached Model: ${LOCKED_MODEL_NAME}`); // Logs kam karne ke liye comment kar sakte hain
+          const model = genAI.getGenerativeModel({ model: LOCKED_MODEL_NAME, systemInstruction: SYSTEM_INSTRUCTION });
           const result = await model.generateContent(message);
-          const response = await result.response;
-          const replyText = response.text();
-
-          // Agar yahan tak pahuche, matlab success!
-          console.log(`✅ SUCCESS with: ${modelName}`);
-          return res.json({ output: { role: "assistant", content: replyText, via: `Gemini (${modelName})` } });
-
-      } catch (error) {
-          console.warn(`⚠️ Failed [${modelName}]: ${error.message}`);
-          // Continue to next model in the list...
+          return res.json({ output: { role: "assistant", content: result.response.text(), via: `Gemini (${LOCKED_MODEL_NAME}) ⚡` } });
+      } catch (e) {
+          console.warn(`⚠️ Cached model failed, retrying search...`);
+          LOCKED_MODEL_NAME = null; // Agar fail hua to bhool jao aur fir se dhundo
       }
   }
 
-  // Agar saare models fail ho gaye:
-  return res.json({ output: { role: "assistant", content: "❌ All models are currently busy or unavailable. Please try again in a moment." } });
+  // 🔍 STEP 2: Agar model yaad nahi hai (First Time), to dhundo
+  for (const modelName of MODELS_TO_TRY) {
+      try {
+          console.log(`🕵️ Testing Model: [ ${modelName} ]`);
+          const model = genAI.getGenerativeModel({ model: modelName, systemInstruction: SYSTEM_INSTRUCTION });
+          const result = await model.generateContent(message);
+          
+          // Agar success hua:
+          console.log(`✅ LOCKING MODEL: ${modelName}`);
+          LOCKED_MODEL_NAME = modelName; // <--- YAHAN LOCK HUA
+          
+          return res.json({ output: { role: "assistant", content: result.response.text(), via: `Gemini (${modelName})` } });
+      } catch (error) {
+          // Fail hua to agla try karo
+          // console.log(`Skipping ${modelName}...`);
+      }
+  }
+
+  return res.json({ output: { role: "assistant", content: "❌ Server Busy: Please try again." } });
 });
 
 if (require("fs").existsSync(PUBLIC_DIR)) {
