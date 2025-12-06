@@ -1,5 +1,5 @@
 // backend/server.js
-// INDRESH 2.0 - FINAL FIXED VERSION
+// INDRESH 2.0 - GEMINI 2.5 ORIGINAL (Fixed)
 
 const express = require("express");
 const cors = require("cors");
@@ -12,7 +12,7 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
-// Rate Limiter (Ye zaroori hai Render ke liye)
+// Rate Limiter (Zaruri hai Render ke liye)
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
     max: 100 
@@ -27,20 +27,20 @@ const GROQ_KEY = (process.env.GROQ_KEY || "").trim();
 
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
-// 🔥 Models Configuration (Jo tumne manga tha)
+// --- 🔥 WAHI MODELS JO AAPNE MANGE THE ---
 const MODEL_FLASH = "gemini-2.5-flash"; 
-const MODEL_PRO   = "gemini-3.0-pro";
+const MODEL_PRO   = "gemini-2.5-pro";
 const MODEL_GROQ  = "llama-3.1-8b-instant";
 
 const SYSTEM_INSTRUCTION_INDRESH = `
 You are Indresh 2.0, a smart Indian AI assistant.
 Language: Detect user language (Hindi/English/Hinglish) and reply in same.
 Tone: Friendly, helpful, direct. No drama.
-Length: Adaptive - Short for greetings, Detailed for queries.
+Length: Short for simple greetings, Detailed for tasks.
 `;
 
-// 🔥 CRITICAL FIX: History Cleaner
-// Ye function ensure karega ki Google API kabhi crash na ho
+// --- CRITICAL FIX: HISTORY CLEANER ---
+// Ye function us "User Role" wale error ko rokega
 function sanitizeHistory(history) {
     if (!Array.isArray(history) || history.length === 0) return [];
     
@@ -53,8 +53,8 @@ function sanitizeHistory(history) {
     // 2. Remove empty messages
     formatted = formatted.filter(m => m.parts[0].text && m.parts[0].text.trim() !== "");
 
-    // 3. RULE: Chat MUST start with 'user'.
-    // Agar pehla message AI ka hai, use hata do.
+    // 3. RULE: First message MUST be from 'user'.
+    // Agar pehla message 'model' (AI) ka hai, use hata do.
     while (formatted.length > 0 && formatted[0].role !== "user") {
         formatted.shift();
     }
@@ -66,19 +66,21 @@ app.post("/api/chat", async (req, res) => {
     const { message, history, model } = req.body;
     const requestedType = (model || "gemini").toLowerCase();
     
-    // History clean karke bhejo
+    // History fix karke bhejo
     const geminiHistory = sanitizeHistory(history);
 
     try {
         // ==========================================
-        // GEMINI MODE
+        // GEMINI MODE (2.5 Models)
         // ==========================================
         if (requestedType.includes("gemini") || requestedType.includes("flash") || requestedType.includes("pro")) {
             if (!genAI) return res.json({ output: { role: "assistant", content: "❌ Error: AI Key Missing" } });
 
-            // Model Selection
+            // Simple Logic: Flash mangne par 2.5 Flash, warna 2.5 Pro
             const targetModelName = requestedType.includes("flash") ? MODEL_FLASH : MODEL_PRO;
             
+            console.log(`Using Model: ${targetModelName}`);
+
             const modelInstance = genAI.getGenerativeModel({
                 model: targetModelName,
                 systemInstruction: SYSTEM_INSTRUCTION_INDRESH
@@ -103,6 +105,7 @@ app.post("/api/chat", async (req, res) => {
                 } 
             });
         } 
+        
         // ==========================================
         // GROQ MODE (Backup)
         // ==========================================
