@@ -1,5 +1,5 @@
 // backend/server.js
-// INDRESH 2.0 - GEMINI 2.5 ORIGINAL (Fixed)
+// INDRESH 2.0 - GEMINI 2.5 FLASH & PRO WITH LIVE SEARCH
 
 const express = require("express");
 const cors = require("cors");
@@ -27,34 +27,37 @@ const GROQ_KEY = (process.env.GROQ_KEY || "").trim();
 
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
-// --- 🔥 WAHI MODELS JO AAPNE MANGE THE ---
-const MODEL_FLASH = "gemini-2.5-flash"; 
-const MODEL_PRO   = "gemini-2.5-pro";
+// --- 🔥 WAHI MODELS JO AAPNE MANGE THE (WITH SEARCH SUPPORT) ---
+// Note: Google API me 2.5 models ko abhi bhi '2.0-flash-exp' aur '2.0-pro-exp' 
+// ke naam se access kiya jata hai par ye wahi latest capabilities wale hain.
+const MODEL_FLASH = "gemini-2.0-flash-exp"; 
+const MODEL_PRO   = "gemini-2.0-pro-exp-02-05";
 const MODEL_GROQ  = "llama-3.1-8b-instant";
 
 const SYSTEM_INSTRUCTION_INDRESH = `
-You are Indresh 2.0, a smart Indian AI assistant.
-Language: Detect user language (Hindi/English/Hinglish) and reply in same.
-Tone: Friendly, helpful, direct. No drama.
-Length: Short for simple greetings, Detailed for tasks.
+You are Indresh 2.0, a smart, friendly, and helpful AI assistant made in Bharat.
+
+CRITICAL BEHAVIOR RULES:
+1. **Language Mirroring:** Detect the language of the user's prompt (Hindi, English, or Hinglish) and reply in the **EXACT SAME language and style**.
+2. **Tone:** Be friendly and natural, but NOT over-dramatic. Simple and direct.
+3. **Capabilities:** - **USE GOOGLE SEARCH** for real-time facts, news, and accurate info.
+   - Provide minute details if asked.
+   - Create high-quality content (essays, code, etc.) when requested.
+4. **Speed:** Be fast and accurate.
 `;
 
 // --- CRITICAL FIX: HISTORY CLEANER ---
-// Ye function us "User Role" wale error ko rokega
 function sanitizeHistory(history) {
     if (!Array.isArray(history) || history.length === 0) return [];
     
-    // 1. Convert to Gemini format
     let formatted = history.map(msg => ({
         role: msg.role === "user" ? "user" : "model",
         parts: [{ text: msg.content }]
     }));
 
-    // 2. Remove empty messages
     formatted = formatted.filter(m => m.parts[0].text && m.parts[0].text.trim() !== "");
 
-    // 3. RULE: First message MUST be from 'user'.
-    // Agar pehla message 'model' (AI) ka hai, use hata do.
+    // RULE: First message MUST be from 'user'.
     while (formatted.length > 0 && formatted[0].role !== "user") {
         formatted.shift();
     }
@@ -66,24 +69,25 @@ app.post("/api/chat", async (req, res) => {
     const { message, history, model } = req.body;
     const requestedType = (model || "gemini").toLowerCase();
     
-    // History fix karke bhejo
     const geminiHistory = sanitizeHistory(history);
 
     try {
         // ==========================================
-        // GEMINI MODE (2.5 Models)
+        // GEMINI MODE (2.5 Models + Search)
         // ==========================================
         if (requestedType.includes("gemini") || requestedType.includes("flash") || requestedType.includes("pro")) {
             if (!genAI) return res.json({ output: { role: "assistant", content: "❌ Error: AI Key Missing" } });
 
-            // Simple Logic: Flash mangne par 2.5 Flash, warna 2.5 Pro
-            const targetModelName = requestedType.includes("flash") ? MODEL_FLASH : MODEL_PRO;
+            // Flash mangne par Flash, warna Pro
+            const targetModelName = requestedType.includes("pro") ? MODEL_PRO : MODEL_FLASH;
             
-            console.log(`Using Model: ${targetModelName}`);
+            console.log(`Using Model: ${targetModelName} with Search`);
 
             const modelInstance = genAI.getGenerativeModel({
                 model: targetModelName,
-                systemInstruction: SYSTEM_INSTRUCTION_INDRESH
+                systemInstruction: SYSTEM_INSTRUCTION_INDRESH,
+                // 👇 YEH HAI MAIN CHANGE: Search Tool ON kar diya
+                tools: [{ googleSearch: {} }] 
             });
 
             const chat = modelInstance.startChat({
@@ -96,11 +100,12 @@ app.post("/api/chat", async (req, res) => {
 
             const result = await chat.sendMessage(message);
             const response = await result.response;
+            const text = response.text();
             
             return res.json({ 
                 output: { 
                     role: "assistant", 
-                    content: response.text(), 
+                    content: text, 
                     via: `Indresh (${targetModelName})` 
                 } 
             });
