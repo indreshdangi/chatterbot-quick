@@ -1,0 +1,8 @@
+backend/.env
+backend/node_modules/
+chat_history.json
+backend/.env
+backend/chat.db
+backend/history.json
+backend/server.js.bak
+backend/node_modules/

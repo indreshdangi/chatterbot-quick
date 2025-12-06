@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Indresh 2.0</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    :root{ 
+        --bg: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop');
+        --panel: rgba(255, 255, 255, 0.85);
+        --user: rgba(255, 255, 255, 0.95);
+        --ai: rgba(255, 255, 255, 0.6);
+        --text:#1a1a1a; 
+        --accent:#5b36d6; 
+        --border:rgba(0,0,0,0.1);
+        --blur: 20px; 
+        --glass-bg: rgba(255,255,255,0.75);
+    }
+    
+    .theme-dark{
+        --bg:#0f0f12; 
+        --panel:#1a1a20; 
+        --user:#2f2f38; 
+        --ai:#25252e; 
+        --text:#ececec; 
+        --accent:#7c4dff; 
+        --border:rgba(255,255,255,0.08);
+        --blur: 0px; 
+        --glass-bg: var(--panel);
+        background-image: none !important;
+    }
+
+    body{
+        font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+        background:var(--bg); background-size: cover; background-position: center;
+        color:var(--text); height:100dvh; width: 100%;
+        display:flex; justify-content:center; align-items:center; margin:0;
+        transition: background 0.5s ease;
+    }
+    
+    .card{
+        width:100%; max-width:900px; height:100%; 
+        background:var(--glass-bg); 
+        backdrop-filter: blur(var(--blur)); -webkit-backdrop-filter: blur(var(--blur));
+        display:flex; flex-direction:column; overflow:hidden;
+        transition: all 0.3s ease;
+    }
+    @media(min-width: 600px) { .card { height: 90vh; border-radius: 18px; border: 1px solid var(--border); box-shadow: 0 25px 50px rgba(0,0,0,0.3); } }
+
+    .header{
+        padding:12px 18px; border-bottom:1px solid var(--border); 
+        display:flex; justify-content:space-between; align-items:center; 
+        background:rgba(0,0,0,0.05);
+    }
+    .logo{font-weight:800; font-size:18px; color:var(--accent); display:flex; align-items:center; gap:8px;}
+    
+    .controls { display: flex; gap: 8px; }
+    select, .theme-btn {
+        background: var(--user); color: var(--text); border: 1px solid var(--border);
+        padding: 6px 10px; border-radius: 10px; outline: none; cursor: pointer; 
+        font-weight: 600; font-size: 12px; transition: all 0.2s;
+    }
+
+    .messages{
+        flex:1; overflow-y:auto; padding:20px; 
+        display:flex; flex-direction:column; gap:16px; scroll-behavior: smooth;
+    }
+    
+    .msg{max-width:88%; line-height:1.6; font-size: 15px; display: flex; flex-direction: column;}
+    .msg.user{align-self:flex-end; align-items: flex-end;}
+    .msg.ai{align-self:flex-start; align-items: flex-start;}
+    
+    /* --- BUBBLE CSS FIX FOR MOBILE & TEXT WRAPPING --- */
+    .bubble{
+        padding:12px 18px; border-radius: 18px; position:relative; 
+        word-wrap:break-word; 
+        overflow-wrap: break-word; 
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    .msg.user .bubble{background:var(--user); color:var(--text); border-bottom-right-radius:4px;}
+    .msg.ai .bubble{background:var(--ai); border:1px solid var(--border); border-bottom-left-radius:4px;}
+
+    .bubble strong { color: var(--accent); font-weight: 700; }
+    .bubble p { margin: 0 0 8px 0; }
+    .bubble ul, .bubble ol { margin: 5px 0 10px 20px; padding: 0; }
+    
+    /* PRE WRAP FIX - Forces application text to stay inside screen */
+    .bubble pre, .bubble code { 
+        background: rgba(0,0,0,0.1); 
+        padding: 8px; 
+        border-radius: 6px; 
+        font-family: monospace; 
+        white-space: pre-wrap !important; 
+        word-break: break-word !important;
+        max-width: 100%;
+    }
+    
+    .via-tag { font-size: 10px; opacity: 0.5; margin-top: 4px; margin-left: 5px; }
+
+    .footer-container {
+        border-top:1px solid var(--border); background:rgba(0,0,0,0.05);
+        display: flex; flex-direction: column;
+    }
+
+    .footer {
+        padding: 8px 10px; 
+        display: flex; gap: 6px; align-items: center;
+        width: 100%; box-sizing: border-box; 
+    }
+    
+    input {
+        flex: 1; min-width: 50px; 
+        padding: 10px 14px; border-radius: 25px; 
+        border: 1px solid var(--border); 
+        background: var(--user); color: var(--text); 
+        outline: none; font-size: 15px;
+    }
+    input:focus { box-shadow: 0 0 0 2px var(--accent); }
+
+    button#sendBtn {
+        width: 42px; height: 42px; border-radius: 50%; border: none; 
+        background: var(--accent); color: #fff; 
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; flex-shrink: 0; font-size: 16px;
+    }
+    button#sendBtn:active { transform: scale(0.9); }
+    
+    /* Branding Dropdown */
+    #geminiSubSelect {
+        display: none; padding: 8px; font-size: 11px; 
+        max-width: 100px; border-radius: 8px; flex-shrink: 0;
+        background: var(--user); border: 1px solid var(--accent); 
+        color: var(--text); text-overflow: ellipsis; font-weight: 700;
+    }
+
+    .disclaimer {
+        text-align: center; font-size: 10px; opacity: 0.5; padding-bottom: 5px;
+        color: var(--text); pointer-events: none;
+    }
+
+    .typing-dot { display:inline-block; width:6px; height:6px; background:var(--text); border-radius:50%; margin-right:3px; animation: wave 1.3s linear infinite; }
+    .typing-dot:nth-child(2) { animation-delay: -1.1s; } .typing-dot:nth-child(3) { animation-delay: -0.9s; }
+    @keyframes wave { 0%, 60%, 100% { transform: initial; opacity: 0.3; } 30% { transform: translateY(-5px); opacity: 1; } }
+
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <div class="logo">🇮🇳 Indresh 2.0</div>
+      <div class="controls">
+          <button class="theme-btn" id="themeToggle" title="Change Theme">🌙</button>
+          <select id="providerSelect">
+              <option value="groq">⚡ Turbo Mode</option>
+              <option value="gemini" selected>🧠 Intelligent Mode</option>
+          </select>
+      </div>
+    </div>
+
+    <div class="messages" id="messages">
+      <div class="msg ai"><div class="bubble">नमस्ते! मैं Indresh 2.0 हूँ। मैं आपकी क्या मदद कर सकता हूँ?</div></div>
+    </div>
+
+    <div class="footer-container">
+        <div class="footer">
+            <select id="geminiSubSelect">
+                <option value="flash">🚀 Speed </option>
+                <option value="pro">💎 Deep </option>
+            </select>
+            <input id="input" type="text" placeholder="Message..." autofocus autocomplete="off">
+            <button id="sendBtn">➤</button>
+        </div>
+        <div class="disclaimer">Indresh 2.0 • Made in Bharat 🇮🇳</div>
+    </div>
+  </div>
+
+<script>
+  const msgs = document.getElementById('messages');
+  const inp = document.getElementById('input');
+  const btn = document.getElementById('sendBtn');
+  const providerSelect = document.getElementById('providerSelect');
+  const geminiSubSelect = document.getElementById('geminiSubSelect');
+  const themeBtn = document.getElementById('themeToggle');
+  
+  marked.use({ breaks: true });
+  let chatHistory = [];
+
+  function updateUI() {
+    if(providerSelect.value === 'gemini') {
+        geminiSubSelect.style.display = 'block';
+        inp.placeholder = "Ask Indresh Intelligent...";
+    } else {
+        geminiSubSelect.style.display = 'none';
+        inp.placeholder = "Ask Indresh Turbo...";
+    }
+  }
+  providerSelect.addEventListener('change', updateUI);
+  updateUI();
+
+  function typeText(element, text, via) {
+      element.innerHTML = ""; 
+      let i = 0; let speed = 15;
+      if(text.length > 200) speed = 5;
+      function typing() {
+          if (i < text.length) {
+              if(text.charAt(i) === '<') {
+                  let tagEnd = text.indexOf('>', i);
+                  if(tagEnd !== -1) {
+                      element.innerHTML += text.substring(i, tagEnd + 1);
+                      i = tagEnd + 1;
+                      setTimeout(typing, speed);
+                      return;
+                  }
+              }
+              element.innerHTML += text.charAt(i);
+              i++;
+              msgs.scrollTop = msgs.scrollHeight; 
+              setTimeout(typing, speed);
+          } else {
+              element.innerHTML = marked.parse(text);
+              if(via) {
+                  const tag = document.createElement('div');
+                  tag.className = 'via-tag'; tag.innerText = via;
+                  element.parentElement.appendChild(tag);
+              }
+              msgs.scrollTop = msgs.scrollHeight;
+          }
+      }
+      typing();
+  }
+
+  function addMsg(role, text, via, animate=false) {
+    const div = document.createElement('div');
+    div.className = 'msg ' + role;
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    div.appendChild(bubble);
+    msgs.appendChild(div);
+    if(animate && role === 'ai') {
+        typeText(bubble, text, via); 
+    } else {
+        if(role === 'ai') bubble.innerHTML = marked.parse(text);
+        else bubble.textContent = text;
+    }
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  async function send() {
+    const txt = inp.value.trim();
+    if(!txt) return;
+    
+    let finalModel = "groq";
+    if (providerSelect.value === 'gemini') {
+        finalModel = "gemini-" + geminiSubSelect.value;
+    }
+    
+    addMsg('user', txt);
+    inp.value = '';
+    
+    chatHistory.push({ role: "user", content: txt });
+    if(chatHistory.length > 10) chatHistory = chatHistory.slice(-10);
+
+    const loadDiv = document.createElement('div');
+    loadDiv.className = 'msg ai';
+    loadDiv.innerHTML = '<div class="bubble"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>';
+    msgs.appendChild(loadDiv);
+    msgs.scrollTop = msgs.scrollHeight;
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ message: txt, history: chatHistory, model: finalModel }) 
+      });
+      const data = await res.json();
+      loadDiv.remove();
+      if(data.output && data.output.content) {
+        chatHistory.push({ role: "model", content: data.output.content });
+        addMsg('ai', data.output.content, data.output.via, true);
+      } else {
+        addMsg('ai', "Error: No response");
+      }
+    } catch(e) {
+      loadDiv.remove();
+      addMsg('ai', "Error: Check Connection");
+    }
+  }
+
+  themeBtn.onclick = () => {
+      document.body.classList.toggle('theme-dark');
+      themeBtn.innerText = document.body.classList.contains('theme-dark') ? '🎨' : '🌙';
+  };
+  btn.onclick = send;
+  inp.onkeydown = (e) => e.key === 'Enter' ? send() : null;
+</script>
+</body>
+</html>
