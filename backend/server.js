@@ -1,5 +1,5 @@
 // backend/server.js
-// INDRESH 2.0 - GEMINI 2.5 FLASH & PRO WITH LIVE SEARCH
+// INDRESH 2.0 - GEMINI 2.5 FLASH & PRO (WITH SEARCH)
 
 const express = require("express");
 const cors = require("cors");
@@ -12,7 +12,7 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
-// Rate Limiter (Zaruri hai Render ke liye)
+// Rate Limiter (Render ke liye zaruri)
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
     max: 100 
@@ -27,26 +27,29 @@ const GROQ_KEY = (process.env.GROQ_KEY || "").trim();
 
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
-// --- 🔥 WAHI MODELS JO AAPNE MANGE THE (WITH SEARCH SUPPORT) ---
-// Note: Google API me 2.5 models ko abhi bhi '2.0-flash-exp' aur '2.0-pro-exp' 
-// ke naam se access kiya jata hai par ye wahi latest capabilities wale hain.
-const MODEL_FLASH = "gemini-2.0-flash-exp"; 
-const MODEL_PRO   = "gemini-2.0-pro-exp-02-05";
+// --- 🔥 EXACT MODELS (2.5) WITH SEARCH ---
+const MODEL_FLASH = "gemini-2.5-flash"; 
+const MODEL_PRO   = "gemini-2.5-pro";
 const MODEL_GROQ  = "llama-3.1-8b-instant";
 
 const SYSTEM_INSTRUCTION_INDRESH = `
 You are Indresh 2.0, a smart, friendly, and helpful AI assistant made in Bharat.
 
 CRITICAL BEHAVIOR RULES:
-1. **Language Mirroring:** Detect the language of the user's prompt (Hindi, English, or Hinglish) and reply in the **EXACT SAME language and style**.
-2. **Tone:** Be friendly and natural, but NOT over-dramatic. Simple and direct.
-3. **Capabilities:** - **USE GOOGLE SEARCH** for real-time facts, news, and accurate info.
+1. **Language Mirroring:** Automatically detect the user's language (Hindi, English, or Hinglish) and reply in the **EXACT SAME language**.
+   - User: "Aur bhai kya haal?" -> You: "Sab badhiya bhai, tum sunao?"
+   - User: "What is quantum physics?" -> You: Explains in English.
+   
+2. **Tone:** Friendly, direct, and helpful. No fake poetic drama ("Shayar" nahi banna).
+
+3. **Capabilities:** - **USE GOOGLE SEARCH** tool for real-time news, cricket scores, and facts.
    - Provide minute details if asked.
-   - Create high-quality content (essays, code, etc.) when requested.
+   - Generate high-quality content (essays, code) properly.
+
 4. **Speed:** Be fast and accurate.
 `;
 
-// --- CRITICAL FIX: HISTORY CLEANER ---
+// --- HISTORY CLEANER (CRITICAL FIX) ---
 function sanitizeHistory(history) {
     if (!Array.isArray(history) || history.length === 0) return [];
     
@@ -57,7 +60,7 @@ function sanitizeHistory(history) {
 
     formatted = formatted.filter(m => m.parts[0].text && m.parts[0].text.trim() !== "");
 
-    // RULE: First message MUST be from 'user'.
+    // Rule: First message MUST be user
     while (formatted.length > 0 && formatted[0].role !== "user") {
         formatted.shift();
     }
@@ -73,20 +76,20 @@ app.post("/api/chat", async (req, res) => {
 
     try {
         // ==========================================
-        // GEMINI MODE (2.5 Models + Search)
+        // GEMINI MODE (2.5 with Search)
         // ==========================================
         if (requestedType.includes("gemini") || requestedType.includes("flash") || requestedType.includes("pro")) {
             if (!genAI) return res.json({ output: { role: "assistant", content: "❌ Error: AI Key Missing" } });
 
-            // Flash mangne par Flash, warna Pro
-            const targetModelName = requestedType.includes("pro") ? MODEL_PRO : MODEL_FLASH;
+            // Seedha selection: Flash maanga to 2.5 Flash, nahi to 2.5 Pro
+            const targetModelName = requestedType.includes("flash") ? MODEL_FLASH : MODEL_PRO;
             
-            console.log(`Using Model: ${targetModelName} with Search`);
+            console.log(`Using Model: ${targetModelName}`);
 
             const modelInstance = genAI.getGenerativeModel({
                 model: targetModelName,
                 systemInstruction: SYSTEM_INSTRUCTION_INDRESH,
-                // 👇 YEH HAI MAIN CHANGE: Search Tool ON kar diya
+                // 👇 GOOGLE SEARCH TOOL ON (Live Info ke liye)
                 tools: [{ googleSearch: {} }] 
             });
 
