@@ -1,5 +1,5 @@
 // backend/server.js
-// INDRESH 2.0 - GEMINI 2.5 FLASH & PRO (WITH SEARCH)
+// INDRESH 2.0 - CUSTOM IDENTITY & CLEAN LABELS
 
 const express = require("express");
 const cors = require("cors");
@@ -12,7 +12,7 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
-// Rate Limiter (Render ke liye zaruri)
+// Rate Limiter
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
     max: 100 
@@ -27,29 +27,26 @@ const GROQ_KEY = (process.env.GROQ_KEY || "").trim();
 
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
-// --- 🔥 EXACT MODELS (2.5) WITH SEARCH ---
+// --- 🔥 MODELS ---
 const MODEL_FLASH = "gemini-2.5-flash"; 
 const MODEL_PRO   = "gemini-2.5-pro";
 const MODEL_GROQ  = "llama-3.1-8b-instant";
 
 const SYSTEM_INSTRUCTION_INDRESH = `
-You are Indresh 2.0, a smart, friendly, and helpful AI assistant made in Bharat.
+You are Indresh 2.0, a smart, friendly, and helpful AI assistant.
 
-CRITICAL BEHAVIOR RULES:
-1. **Language Mirroring:** Automatically detect the user's language (Hindi, English, or Hinglish) and reply in the **EXACT SAME language**.
-   - User: "Aur bhai kya haal?" -> You: "Sab badhiya bhai, tum sunao?"
-   - User: "What is quantum physics?" -> You: Explains in English.
+CRITICAL IDENTITY RULES:
+1. **CREATOR:** If asked "Who made you?", "Tumhe kisne banaya?", or about your origin, YOU MUST REPLY: **"Mujhe Indresh Dangi ne banaya hai."** (or "I was created by Indresh Dangi."). 
+   - NEVER say you were made by Google.
    
-2. **Tone:** Friendly, direct, and helpful. No fake poetic drama ("Shayar" nahi banna).
+2. **Language Mirroring:** Detect the user's language (Hindi, English, or Hinglish) and reply in the EXACT SAME language.
+   
+3. **Tone:** Friendly, direct, and helpful. No fake poetic drama.
 
-3. **Capabilities:** - **USE GOOGLE SEARCH** tool for real-time news, cricket scores, and facts.
-   - Provide minute details if asked.
-   - Generate high-quality content (essays, code) properly.
-
-4. **Speed:** Be fast and accurate.
+4. **Capabilities:** USE GOOGLE SEARCH tool for real-time facts. Provide minute details if asked.
 `;
 
-// --- HISTORY CLEANER (CRITICAL FIX) ---
+// --- HISTORY CLEANER ---
 function sanitizeHistory(history) {
     if (!Array.isArray(history) || history.length === 0) return [];
     
@@ -60,7 +57,6 @@ function sanitizeHistory(history) {
 
     formatted = formatted.filter(m => m.parts[0].text && m.parts[0].text.trim() !== "");
 
-    // Rule: First message MUST be user
     while (formatted.length > 0 && formatted[0].role !== "user") {
         formatted.shift();
     }
@@ -76,20 +72,21 @@ app.post("/api/chat", async (req, res) => {
 
     try {
         // ==========================================
-        // GEMINI MODE (2.5 with Search)
+        // GEMINI MODE
         // ==========================================
         if (requestedType.includes("gemini") || requestedType.includes("flash") || requestedType.includes("pro")) {
             if (!genAI) return res.json({ output: { role: "assistant", content: "❌ Error: AI Key Missing" } });
 
-            // Seedha selection: Flash maanga to 2.5 Flash, nahi to 2.5 Pro
             const targetModelName = requestedType.includes("flash") ? MODEL_FLASH : MODEL_PRO;
             
+            // LABEL FIX: 'gemini-' hata kar sirf '2.5-flash' dikhana hai
+            const displayModelName = targetModelName.replace("gemini-", "");
+
             console.log(`Using Model: ${targetModelName}`);
 
             const modelInstance = genAI.getGenerativeModel({
                 model: targetModelName,
                 systemInstruction: SYSTEM_INSTRUCTION_INDRESH,
-                // 👇 GOOGLE SEARCH TOOL ON (Live Info ke liye)
                 tools: [{ googleSearch: {} }] 
             });
 
@@ -109,13 +106,14 @@ app.post("/api/chat", async (req, res) => {
                 output: { 
                     role: "assistant", 
                     content: text, 
-                    via: `Indresh (${targetModelName})` 
+                    // Yahan humne 'gemini' word hata diya hai
+                    via: `Indresh (${displayModelName})` 
                 } 
             });
         } 
         
         // ==========================================
-        // GROQ MODE (Backup)
+        // GROQ MODE
         // ==========================================
         else {
             if (!GROQ_KEY) return res.json({ output: { role: "assistant", content: "❌ Error: AI Key Missing" } });
