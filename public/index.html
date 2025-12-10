@@ -7,7 +7,7 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     :root{ 
-        --bg: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop');
+        --bg: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop'); /* Optimized size */
         --panel: rgba(255, 255, 255, 0.85);
         --user: rgba(255, 255, 255, 0.95);
         --ai: rgba(255, 255, 255, 0.6);
@@ -71,7 +71,6 @@
     .msg.user{align-self:flex-end; align-items: flex-end;}
     .msg.ai{align-self:flex-start; align-items: flex-start;}
     
-    /* --- BUBBLE CSS FIX FOR MOBILE & TEXT WRAPPING --- */
     .bubble{
         padding:12px 18px; border-radius: 18px; position:relative; 
         word-wrap:break-word; 
@@ -85,7 +84,6 @@
     .bubble p { margin: 0 0 8px 0; }
     .bubble ul, .bubble ol { margin: 5px 0 10px 20px; padding: 0; }
     
-    /* PRE WRAP FIX - Forces application text to stay inside screen */
     .bubble pre, .bubble code { 
         background: rgba(0,0,0,0.1); 
         padding: 8px; 
@@ -126,7 +124,6 @@
     }
     button#sendBtn:active { transform: scale(0.9); }
     
-    /* Branding Dropdown */
     #geminiSubSelect {
         display: none; padding: 8px; font-size: 11px; 
         max-width: 100px; border-radius: 8px; flex-shrink: 0;
@@ -165,17 +162,19 @@
     <div class="footer-container">
         <div class="footer">
             <select id="geminiSubSelect">
-                <option value="flash">🚀 Speed </option>
-                <option value="pro">💎 Deep </option>
+                <option value="flash">🚀 Speed (2.5)</option>
+                <option value="pro">💎 Deep (2.5)</option>
             </select>
             <input id="input" type="text" placeholder="Message..." autofocus autocomplete="off">
             <button id="sendBtn">➤</button>
         </div>
-        <div class="disclaimer">Indresh 2.0 • Made in Bharat 🇮🇳</div>
+        <div class="disclaimer">Indresh can make mistakes, so double-check it.</div>
     </div>
   </div>
 
 <script>
+  if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js')); }
+
   const msgs = document.getElementById('messages');
   const inp = document.getElementById('input');
   const btn = document.getElementById('sendBtn');
