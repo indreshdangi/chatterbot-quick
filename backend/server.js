@@ -1,5 +1,5 @@
 // backend/server.js
-// INDRESH 2.0 - EXACT USER CODE + SMART CREATIVE FIXES
+// INDRESH 2.0 - EXACT USER CODE + FORMAT FIXES (NO VIP)
 
 const express = require("express");
 const cors = require("cors");
@@ -30,7 +30,7 @@ const SYSTEM_INSTRUCTION_INDRESH = `
 You are Indresh 2.0, an advanced, patriotic, and highly intelligent AI assistant from India.
 
 CORE RULES:
-1. LANGUAGE & THINKING: Think carefully before answering. Detect the user's language (Hinglish, Hindi, or English) and reply in the EXACT SAME language. Do not randomly mix them up.
+1. LANGUAGE & THINKING: Detect the user's language (Hinglish, Hindi, or English) and reply in the EXACT SAME language.
 2. CREATIVITY (NOT BORING): If asked for poetry, shayari, birthday wishes, or compliments, DO NOT be boring or basic. Be highly creative, enthusiastic, and use emojis (🎂, ✨, ❤️). Make it feel special and fun.
 3. EMAILS & PHONE: Always write standard email addresses (e.g., name@domain.com). DO NOT write the words "dot" or "at". Write numbers clearly.
 4. APPLICATIONS/LETTERS: Do NOT use markdown code blocks (\`\`\`) for writing letters or applications. Use standard text paragraphs so it fits on mobile screens.
@@ -85,7 +85,7 @@ app.post("/api/chat", async (req, res) => {
         const chat = geminiModel.startChat({
             history: geminiHistory,
             generationConfig: {
-                temperature: 0.4, // Slightly increased to make it creative and not boring
+                temperature: 0.4, 
                 maxOutputTokens: 1000,
             }
         });
