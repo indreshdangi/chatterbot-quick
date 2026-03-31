@@ -1,5 +1,5 @@
 // backend/server.js
-// INDRESH 2.0 - RAILWAY FIX (Normal Tone, Smart Answers, Exact Models)
+// INDRESH 2.0 - EXACT USER CODE + SMART CREATIVE FIXES
 
 const express = require("express");
 const cors = require("cors");
@@ -18,27 +18,25 @@ const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();
 const GROQ_KEY = (process.env.GROQ_KEY || "").trim();
 
-// --- 🔥 YOUR EXACT MODELS ---
+// --- 🔥 CORRECT MODELS (User Provided) ---
 const MODEL_GEMINI_FLASH = "gemini-2.0-flash-exp"; 
 const MODEL_GEMINI_PRO = "gemini-2.5-pro-preview-03-25";
 const MODEL_GROQ = "llama-3.1-8b-instant";        
 
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
-// --- 🧠 SYSTEM PROMPT (SMART + FORMAT FIX, NO VIP) ---
+// --- SYSTEM PROMPT (SMART & STRICT FORMATTING) ---
 const SYSTEM_INSTRUCTION_INDRESH = `
 You are Indresh 2.0, an advanced, patriotic, and highly intelligent AI assistant from India.
 
-**CORE BEHAVIOR & LANGUAGE:**
-1. Detect user's language (Hinglish, Hindi, or English) and reply in the same language. 
-2. Be energetic, smart, and creative. If asked for poetry, shayari, or wishes, DO NOT be boring. Use Emojis (🎂, ✨, ❤️, 🇮🇳) and make it heartwarming.
+CORE RULES:
+1. LANGUAGE & THINKING: Think carefully before answering. Detect the user's language (Hinglish, Hindi, or English) and reply in the EXACT SAME language. Do not randomly mix them up.
+2. CREATIVITY (NOT BORING): If asked for poetry, shayari, birthday wishes, or compliments, DO NOT be boring or basic. Be highly creative, enthusiastic, and use emojis (🎂, ✨, ❤️). Make it feel special and fun.
+3. EMAILS & PHONE: Always write standard email addresses (e.g., name@domain.com). DO NOT write the words "dot" or "at". Write numbers clearly.
+4. APPLICATIONS/LETTERS: Do NOT use markdown code blocks (\`\`\`) for writing letters or applications. Use standard text paragraphs so it fits on mobile screens.
+5. SEARCH: Use Google Search implicitly for fresh facts and current information.
 
-**CRITICAL FORMATTING RULES:**
-1. **EMAIL/PHONE:** Always write standard email addresses (e.g., name@domain.com). DO NOT write the words "dot" or "at". Write phone numbers clearly.
-2. **APPLICATIONS/LETTERS:** Do NOT use markdown code blocks (\`\`\`) for writing letters or applications. Use standard text paragraphs so it fits on mobile screens perfectly.
-3. **SEARCH:** Use Google Search implicitly for fresh facts and current affairs.
-
-Keep answers sharp, accurate, and concise.
+Keep answers accurate, smart, and concise.
 `;
 
 // --- HISTORY CLEANER ---
@@ -87,7 +85,7 @@ app.post("/api/chat", async (req, res) => {
         const chat = geminiModel.startChat({
             history: geminiHistory,
             generationConfig: {
-                temperature: 0.4, // Set for smart/creative responses
+                temperature: 0.4, // Slightly increased to make it creative and not boring
                 maxOutputTokens: 1000,
             }
         });
@@ -135,7 +133,9 @@ app.post("/api/chat", async (req, res) => {
 
   } catch (error) {
       console.error("Server Error:", error.message);
-      return res.json({ output: { role: "assistant", content: `⚠️ Technical Issue: ${error.message}` } });
+      let userMsg = `⚠️ Technical Issue: ${error.message}`;
+      if(error.message.includes("404")) userMsg = "⚠️ Model version not found. Please check API Access.";
+      return res.json({ output: { role: "assistant", content: userMsg } });
   }
 });
 
