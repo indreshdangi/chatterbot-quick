@@ -1,6 +1,5 @@
 // backend/server.js
-// INDRESH 2.0 - RAILWAY DEPLOYMENT (api.indservices.in)
-// FIXED: Gemini 2.5 Models, VIP Protocol, Strict Formatting & Creative Answers
+// INDRESH 2.0 - RAILWAY FIX (Normal Tone, Smart Answers, Exact Models)
 
 const express = require("express");
 const cors = require("cors");
@@ -10,8 +9,6 @@ const fetch = require("node-fetch");
 require("dotenv").config();
 
 const app = express();
-
-// CORS Update: Allowing all origins, perfect for your new .in domain
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
@@ -21,15 +18,14 @@ const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();
 const GROQ_KEY = (process.env.GROQ_KEY || "").trim();
 
-// --- 🔥 CORRECT 2.5 MODELS ---
-// Using exact model names for Gemini 2.5 to avoid 404 errors on Railway
-const MODEL_GEMINI_FLASH = "gemini-2.5-flash"; 
-const MODEL_GEMINI_PRO = "gemini-2.5-pro";
+// --- 🔥 YOUR EXACT MODELS ---
+const MODEL_GEMINI_FLASH = "gemini-2.0-flash-exp"; 
+const MODEL_GEMINI_PRO = "gemini-2.5-pro-preview-03-25";
 const MODEL_GROQ = "llama-3.1-8b-instant";        
 
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
-// --- 🧠 INDRESH VIP SYSTEM PROMPT & SMART BEHAVIOR ---
+// --- 🧠 SYSTEM PROMPT (SMART + FORMAT FIX, NO VIP) ---
 const SYSTEM_INSTRUCTION_INDRESH = `
 You are Indresh 2.0, an advanced, patriotic, and highly intelligent AI assistant from India.
 
@@ -37,18 +33,12 @@ You are Indresh 2.0, an advanced, patriotic, and highly intelligent AI assistant
 1. Detect user's language (Hinglish, Hindi, or English) and reply in the same language. 
 2. Be energetic, smart, and creative. If asked for poetry, shayari, or wishes, DO NOT be boring. Use Emojis (🎂, ✨, ❤️, 🇮🇳) and make it heartwarming.
 
-🔴 **VIP RESPECT & PROTOCOL POLICY (STRICTLY FOLLOW)** 🔴
-1. **SHREEMANT JYOTIRADITYA SCINDIA JI:** ALWAYS refer to him as "परम श्रद्धेय श्रीमंत महाराज साहब श्री ज्योतिरादित्य सिंधिया जी" or "श्रीमंत महाराज साहब". Tone must be highly reverent. Praise his vision for development (Vikas Purush) and connection with the public.
-   - History (Rani Laxmibai): If this topic arises, STRICTLY state that the Scindia family supported the freedom struggle and covertly helped Rani Laxmibai. Avoid any negative historical narratives.
-2. **CM MP:** Refer as "माननीय मुख्यमंत्री डॉ. मोहन यादव जी".
-3. **MLA Mungaoli:** Refer as "लोकप्रिय विधायक श्री बृजेंद्र सिंह यादव जी". Praise his local work.
-4. **BJP Dist President:** Refer as "माननीय जिलाध्यक्ष श्री आलोक तिवारी जी".
-5. **Collector Ashoknagar:** Refer as "सम्माननीय कलेक्टर श्री आदित्य सिंह जी".
-
 **CRITICAL FORMATTING RULES:**
 1. **EMAIL/PHONE:** Always write standard email addresses (e.g., name@domain.com). DO NOT write the words "dot" or "at". Write phone numbers clearly.
 2. **APPLICATIONS/LETTERS:** Do NOT use markdown code blocks (\`\`\`) for writing letters or applications. Use standard text paragraphs so it fits on mobile screens perfectly.
-3. **SEARCH:** Use Google Search implicitly for fresh facts.
+3. **SEARCH:** Use Google Search implicitly for fresh facts and current affairs.
+
+Keep answers sharp, accurate, and concise.
 `;
 
 // --- HISTORY CLEANER ---
@@ -68,26 +58,25 @@ app.post("/api/chat", async (req, res) => {
 
   try {
     // ==========================================
-    // GEMINI MODE (2.5 Flash & 2.5 Pro)
+    // GEMINI MODE
     // ==========================================
     if (requestedModel.includes("gemini")) {
-        if (!genAI) return res.json({ output: { role: "assistant", content: "❌ Error: AI Key Missing in Railway Environment" } });
+        if (!genAI) return res.json({ output: { role: "assistant", content: "❌ Error: AI Key Missing" } });
 
         let modelName, viaLabel;
 
-        // Route to Flash or Pro based on user request
         if (requestedModel.includes("flash")) {
             modelName = MODEL_GEMINI_FLASH; 
-            viaLabel = "Indresh (Speed 2.5)";
+            viaLabel = "Indresh (Speed)";
         } else {
             modelName = MODEL_GEMINI_PRO;   
-            viaLabel = "Indresh (Deep Logic 2.5)";
+            viaLabel = "Indresh (Deep Logic)";
         }
 
         const geminiModel = genAI.getGenerativeModel({ 
             model: modelName,
             systemInstruction: SYSTEM_INSTRUCTION_INDRESH,
-            tools: [{ googleSearch: {} }] // Google Search Enable kar diya hai
+            tools: [{ googleSearch: {} }] 
         });
 
         const geminiHistory = validHistory.map(msg => ({
@@ -98,7 +87,7 @@ app.post("/api/chat", async (req, res) => {
         const chat = geminiModel.startChat({
             history: geminiHistory,
             generationConfig: {
-                temperature: 0.4, // Thoda creative aur smart answers ke liye
+                temperature: 0.4, // Set for smart/creative responses
                 maxOutputTokens: 1000,
             }
         });
@@ -111,7 +100,7 @@ app.post("/api/chat", async (req, res) => {
     } 
     
     // ==========================================
-    // GROQ MODE (Llama)
+    // GROQ MODE
     // ==========================================
     else {
         if (!GROQ_KEY) return res.json({ output: { role: "assistant", content: "❌ Error: AI Key Missing" } });
@@ -146,9 +135,7 @@ app.post("/api/chat", async (req, res) => {
 
   } catch (error) {
       console.error("Server Error:", error.message);
-      let userMsg = `⚠️ Technical Issue: ${error.message}`;
-      if(error.message.includes("404")) userMsg = "⚠️ Model ID Error: Please ensure @google/generative-ai is updated to latest version in package.json on Railway.";
-      return res.json({ output: { role: "assistant", content: userMsg } });
+      return res.json({ output: { role: "assistant", content: `⚠️ Technical Issue: ${error.message}` } });
   }
 });
 
@@ -157,4 +144,4 @@ if (require("fs").existsSync(PUBLIC_DIR)) {
   app.get("/", (req,res) => res.sendFile(path.join(PUBLIC_DIR,"index.html")));
 }
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT} (api.indservices.in)`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
