@@ -1,7 +1,7 @@
 {
-  "name": "indresh-2.0",
+  "name": "indresh-api",
   "version": "1.0.0",
-  "description": "Indresh AI Backend",
+  "description": "Indresh Backend",
   "main": "backend/server.js",
   "scripts": {
     "start": "node backend/server.js"
