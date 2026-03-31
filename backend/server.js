@@ -1,5 +1,5 @@
 // backend/server.js
-// INDRESH 2.0 - EXACT USER CODE + FORMAT FIXES (NO VIP)
+// INDRESH 2.0 - EXACT USER MODELS & FORMAT FIXES
 
 const express = require("express");
 const cors = require("cors");
@@ -18,14 +18,14 @@ const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();
 const GROQ_KEY = (process.env.GROQ_KEY || "").trim();
 
-// --- 🔥 CORRECT MODELS (User Provided) ---
+// --- 🔥 CORRECT MODELS (As per your research and request) ---
 const MODEL_GEMINI_FLASH = "gemini-2.0-flash-exp"; 
 const MODEL_GEMINI_PRO = "gemini-2.5-pro-preview-03-25";
 const MODEL_GROQ = "llama-3.1-8b-instant";        
 
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
-// --- SYSTEM PROMPT (SMART & STRICT FORMATTING) ---
+// --- 🧠 SYSTEM PROMPT (SMART & STRICT FORMATTING) ---
 const SYSTEM_INSTRUCTION_INDRESH = `
 You are Indresh 2.0, an advanced, patriotic, and highly intelligent AI assistant from India.
 
@@ -33,7 +33,7 @@ CORE RULES:
 1. LANGUAGE & THINKING: Detect the user's language (Hinglish, Hindi, or English) and reply in the EXACT SAME language.
 2. CREATIVITY (NOT BORING): If asked for poetry, shayari, birthday wishes, or compliments, DO NOT be boring or basic. Be highly creative, enthusiastic, and use emojis (🎂, ✨, ❤️). Make it feel special and fun.
 3. EMAILS & PHONE: Always write standard email addresses (e.g., name@domain.com). DO NOT write the words "dot" or "at". Write numbers clearly.
-4. APPLICATIONS/LETTERS: Do NOT use markdown code blocks (\`\`\`) for writing letters or applications. Use standard text paragraphs so it fits on mobile screens.
+4. APPLICATIONS/LETTERS: Do NOT use markdown code blocks (\`\`\`) for writing letters or applications. Use standard text paragraphs so it fits perfectly on mobile screens.
 5. SEARCH: Use Google Search implicitly for fresh facts and current information.
 
 Keep answers accurate, smart, and concise.
@@ -65,10 +65,10 @@ app.post("/api/chat", async (req, res) => {
 
         if (requestedModel.includes("flash")) {
             modelName = MODEL_GEMINI_FLASH; 
-            viaLabel = "Indresh (Speed)";
+            viaLabel = "Indresh (Speed 2.0)";
         } else {
             modelName = MODEL_GEMINI_PRO;   
-            viaLabel = "Indresh (Deep Logic)";
+            viaLabel = "Indresh (Deep Logic 2.5)";
         }
 
         const geminiModel = genAI.getGenerativeModel({ 
@@ -85,7 +85,7 @@ app.post("/api/chat", async (req, res) => {
         const chat = geminiModel.startChat({
             history: geminiHistory,
             generationConfig: {
-                temperature: 0.4, 
+                temperature: 0.5, // Increased slightly for more creative/fun answers
                 maxOutputTokens: 1000,
             }
         });
@@ -134,7 +134,12 @@ app.post("/api/chat", async (req, res) => {
   } catch (error) {
       console.error("Server Error:", error.message);
       let userMsg = `⚠️ Technical Issue: ${error.message}`;
-      if(error.message.includes("404")) userMsg = "⚠️ Model version not found. Please check API Access.";
+      
+      // If the 2.5 Pro model name is incorrect or restricted, it will tell you here.
+      if(error.message.includes("404")) {
+          userMsg = `⚠️ Google Model Error: The model name '${requestedModel.includes("flash") ? MODEL_GEMINI_FLASH : MODEL_GEMINI_PRO}' is not found or not active for your API key.`;
+      }
+      
       return res.json({ output: { role: "assistant", content: userMsg } });
   }
 });
