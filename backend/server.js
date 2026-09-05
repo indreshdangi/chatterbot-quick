@@ -29,10 +29,10 @@ const GROQ_KEY = (process.env.GROQ_KEY || "").trim();
 
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
-// --- 🔥 MODELS (Using 2.0 Flash as per your deep research & 2.5 Pro) ---
-const MODEL_FLASH = "gemini-2.0-flash"; 
+// --- 🔥 MODELS (Using 2.5 Flash for Speed, 2.5 Flash-8B for Turbo & 2.5 Pro for Deep) ---
+const MODEL_FLASH = "gemini-2.5-flash"; 
 const MODEL_PRO   = "gemini-2.5-pro";
-const MODEL_GROQ  = "llama-3.1-8b-instant";
+const MODEL_GROQ  = "gemini-2.5-flash-8b"; // Changed Turbo from Llama to 2.5 Flash-8B
 
 // --- SYSTEM PROMPT (Deep Research, Formatting Fix & Custom Identity) ---
 const SYSTEM_INSTRUCTION_INDRESH = `
@@ -77,14 +77,18 @@ app.post("/api/chat", async (req, res) => {
 
     try {
         // ==========================================
-        // GEMINI MODE
+        // GEMINI MODE (Handles Speed, Deep, and default Gemini requests)
         // ==========================================
-        if (requestedType.includes("gemini") || requestedType.includes("flash") || requestedType.includes("pro")) {
+        if (requestedType.includes("gemini") || requestedType.includes("flash") || requestedType.includes("pro") || requestedType.includes("speed") || requestedType.includes("deep")) {
             if (!genAI) return res.json({ output: { role: "assistant", content: "❌ Error: AI Key Missing" } });
 
-            const targetModelName = requestedType.includes("flash") ? MODEL_FLASH : MODEL_PRO;
+            // Route "speed" to MODEL_FLASH, "deep" and "pro" to MODEL_PRO, defaults to MODEL_FLASH
+            let targetModelName = MODEL_FLASH;
+            if (requestedType.includes("pro") || requestedType.includes("deep")) {
+                targetModelName = MODEL_PRO;
+            }
             
-            // LABEL FIX: 'gemini-' hata kar sirf '2.0-flash' ya '2.5-pro' dikhana hai
+            // LABEL FIX: 'gemini-' hata kar sirf '2.5-flash' ya '2.5-pro' dikhana hai
             const displayModelName = targetModelName.replace("gemini-", "");
 
             console.log(`Using Model: ${targetModelName}`);
@@ -117,37 +121,41 @@ app.post("/api/chat", async (req, res) => {
         } 
         
         // ==========================================
-        // GROQ MODE
+        // TURBO MODE (Now using Gemini 2.5 Flash-8B instead of Groq)
         // ==========================================
+        else if (requestedType.includes("turbo")) {
+             if (!genAI) return res.json({ output: { role: "assistant", content: "❌ Error: AI Key Missing" } });
+             
+             const displayModelName = MODEL_GROQ.replace("gemini-", "");
+             console.log(`Using Model: ${MODEL_GROQ}`);
+             
+             const modelInstance = genAI.getGenerativeModel({
+                 model: MODEL_GROQ,
+                 systemInstruction: SYSTEM_INSTRUCTION_INDRESH,
+             });
+
+             const chat = modelInstance.startChat({
+                 history: geminiHistory,
+                 generationConfig: {
+                     temperature: 0.7,      
+                     maxOutputTokens: 8192, 
+                 }
+             });
+
+             const result = await chat.sendMessage(message);
+             const response = await result.response;
+             const text = response.text();
+             
+             return res.json({ 
+                 output: { 
+                     role: "assistant", 
+                     content: text, 
+                     via: `Indresh (${displayModelName})` 
+                 } 
+             });
+        }
         else {
-            if (!GROQ_KEY) return res.json({ output: { role: "assistant", content: "❌ Error: AI Key Missing" } });
-
-            const groqMessages = [
-                { role: "system", content: SYSTEM_INSTRUCTION_INDRESH },
-                ...history.map(msg => ({
-                    role: msg.role === "user" ? "user" : "assistant",
-                    content: msg.content
-                })),
-                { role: "user", content: message }
-            ];
-
-            const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${GROQ_KEY}`
-                },
-                body: JSON.stringify({
-                    model: MODEL_GROQ,
-                    messages: groqMessages,
-                    temperature: 0.7,
-                    max_tokens: 4096
-                })
-            });
-
-            const data = await response.json();
-            const reply = data.choices?.[0]?.message?.content || "Error from API";
-            return res.json({ output: { role: "assistant", content: reply, via: "Indresh (Turbo)" } });
+             return res.json({ output: { role: "assistant", content: "❌ Error: Unknown Model Requested" } });
         }
 
     } catch (error) {
