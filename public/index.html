@@ -132,6 +132,14 @@
     }
 
     .search-toggle {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: relative;
+        z-index: 20;
+        flex: 0 0 auto;
         padding: 8px 10px;
         border-radius: 10px;
         border: 1px solid var(--border);
@@ -206,7 +214,7 @@
   </div>
 
 <script>
-  if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js')); }
+  if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js?v=3')); }
 
   const msgs = document.getElementById('messages');
   const inp = document.getElementById('input');
