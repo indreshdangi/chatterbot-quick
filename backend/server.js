@@ -1,3 +1,29 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // backend/server.js
 // INDRESH 2.0 - Render deployment
 
@@ -13,11 +39,30 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100
+// Rate-limit only chat API calls. Static files and the homepage must never
+// be blocked by chat traffic. Render provides the original client IP as the
+// first address in X-Forwarded-For.
+const chatLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => {
+        const forwardedFor = req.get("x-forwarded-for");
+        const firstForwardedIp = typeof forwardedFor === "string"
+            ? forwardedFor.split(",")[0].trim()
+            : "";
+        return firstForwardedIp || req.ip || req.socket.remoteAddress || "unknown";
+    },
+    handler: (_req, res) => {
+        res.status(429).json({
+            output: {
+                role: "assistant",
+                content: "You have sent too many messages in a short time. Please wait a minute and try again."
+            }
+        });
+    }
 });
-app.use(limiter);
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -32,7 +77,7 @@ const CLOUDFLARE_API_TOKEN =
 // Model routing
 const MODEL_GEMMA_SPEED = "@cf/google/gemma-4-26b-a4b-it";
 const MODEL_CLOUDFLARE_PRO = "@cf/nvidia/nemotron-3-120b-a12b";
-const MODEL_GEMINI_SEARCH = "gemini-3.5-flash-lite";
+const MODEL_GEMINI_SEARCH = "gemini-2.5-flash-lite";
 
 // Original system prompt for Gemini Search mode
 const SYSTEM_INSTRUCTION_INDRESH = `
@@ -362,7 +407,7 @@ async function generateWithGeminiSearch(message, history) {
 }
 
 // Main chat API
-app.post("/api/chat", async (req, res) => {
+app.post("/api/chat", chatLimiter, async (req, res) => {
     const body = req.body || {};
     const message = typeof body.message === "string" ? body.message.trim() : "";
     const history = body.history;
@@ -551,3 +596,6 @@ if (fs.existsSync(PUBLIC_DIR)) {
 app.listen(PORT, () =>
     console.log(`Server running on port ${PORT}`)
 );
+
+
+
