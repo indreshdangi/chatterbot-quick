@@ -142,9 +142,13 @@ async function generateWithGemma(message, history) {
             "Content-Type": "application/json"
         },
         body: JSON.stringify({
-            messages,
-            temperature: 0.7,
-            max_tokens: 8192
+    messages,
+    temperature: 0.7,
+    max_tokens: 8192,
+    chat_template_kwargs: {
+        enable_thinking: false
+    }
+})
         })
     });
 
@@ -171,11 +175,16 @@ async function generateWithGemma(message, history) {
         );
     }
 
-    const generatedText =
-        data?.result?.response ??
-        data?.result?.output_text ??
-        data?.result?.text ??
-        data?.response;
+    const resultData = data?.result ?? data;
+
+const generatedText =
+    resultData?.choices?.[0]?.message?.content ??
+    resultData?.choices?.[0]?.text ??
+    resultData?.response ??
+    resultData?.output_text ??
+    resultData?.text ??
+    data?.response ??
+    (typeof resultData === "string" ? resultData : null);
 
     if (typeof generatedText !== "string" || !generatedText.trim()) {
         throw new Error(
