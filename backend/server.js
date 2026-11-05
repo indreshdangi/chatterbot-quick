@@ -32,7 +32,7 @@ const CLOUDFLARE_API_TOKEN =
 // Model routing
 const MODEL_GEMMA_SPEED = "@cf/google/gemma-4-26b-a4b-it";
 const MODEL_CLOUDFLARE_PRO = "@cf/nvidia/nemotron-3-120b-a12b";
-const MODEL_GEMINI_SEARCH = "gemini-2.5-flash-lite";
+const MODEL_GEMINI_SEARCH = "gemini-3.5-flash-lite";
 
 // Original system prompt for Gemini Search mode
 const SYSTEM_INSTRUCTION_INDRESH = `
