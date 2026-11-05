@@ -1,10 +1,11 @@
 
-// backend/server.js
-// INDRESH 2.0 - Render deployment
+ // backend/server.js
+ // INDRESH 2.0 - Render deployment
 
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const fs = require("fs");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const rateLimit = require("express-rate-limit");
 require("dotenv").config();
@@ -36,11 +37,12 @@ const CLOUDFLARE_API_TOKEN =
     (process.env.CLOUDFLARE_API_TOKEN || "").trim();
 
 // Model routing
+// Frontend sends: gemini-flash -> Speed, gemini-pro -> Pro, groq -> Turbo.
 const MODEL_GEMMA_SPEED = "@cf/google/gemma-4-26b-a4b-it";
 const MODEL_PRO = "gemini-2.5-flash";
 
-// Existing Turbo model retained
-const MODEL_GROQ = "gemini-2.5-flash-8b";
+// Turbo mode: supported lightweight Gemini 2.5 model.
+const MODEL_TURBO = "gemini-2.5-flash-lite";
 
 // Original system prompt
 const SYSTEM_INSTRUCTION_INDRESH = `
@@ -65,20 +67,33 @@ const SYSTEM_INSTRUCTION_GEMMA = SYSTEM_INSTRUCTION_INDRESH.replace(
     "5. **Capabilities:** If live web search is unavailable, do not claim to have searched or verified current facts. Clearly say when information needs current verification."
 );
 
-// Gemini history conversion
-function sanitizeHistory(history) {
+// Convert browser chat history to Gemini's expected format.
+// The browser already includes the current user message in history before
+// calling /api/chat, so remove that final copy before sendMessage() to avoid
+// sending the current message twice.
+function sanitizeHistory(history, currentMessage) {
     if (!Array.isArray(history) || history.length === 0) return [];
 
     let formatted = history.map((msg) => ({
-        role: msg.role === "user" ? "user" : "model",
+        role: msg && msg.role === "user" ? "user" : "model",
         parts: [{
-            text: typeof msg.content === "string" ? msg.content : ""
+            text: msg && typeof msg.content === "string" ? msg.content : ""
         }]
     }));
 
     formatted = formatted.filter(
         (msg) => msg.parts[0].text && msg.parts[0].text.trim() !== ""
     );
+
+    const lastMessage = formatted[formatted.length - 1];
+    if (
+        currentMessage &&
+        lastMessage &&
+        lastMessage.role === "user" &&
+        lastMessage.parts[0].text.trim() === currentMessage.trim()
+    ) {
+        formatted.pop();
+    }
 
     while (formatted.length > 0 && formatted[0].role !== "user") {
         formatted.shift();
@@ -87,12 +102,14 @@ function sanitizeHistory(history) {
     return formatted;
 }
 
-// Cloudflare history conversion
+// Convert browser chat history to Cloudflare's messages format.
+// The current user message is already in browser history; append it only if
+// it is not already the last message.
 function sanitizeCloudflareMessages(history, currentMessage) {
     const formatted = Array.isArray(history)
         ? history.map((msg) => ({
-            role: msg.role === "user" ? "user" : "assistant",
-            content: typeof msg.content === "string" ? msg.content : ""
+            role: msg && msg.role === "user" ? "user" : "assistant",
+            content: msg && typeof msg.content === "string" ? msg.content : ""
         })).filter((msg) => msg.content.trim() !== "")
         : [];
 
@@ -116,7 +133,23 @@ function sanitizeCloudflareMessages(history, currentMessage) {
     return formatted;
 }
 
-// Gemma API
+// Normalize possible Workers AI text response shapes.
+function extractTextContent(value) {
+    if (typeof value === "string") return value;
+
+    if (Array.isArray(value)) {
+        return value.map((part) => {
+            if (typeof part === "string") return part;
+            if (part && typeof part.text === "string") return part.text;
+            if (part && typeof part.content === "string") return part.content;
+            return "";
+        }).join("");
+    }
+
+    return null;
+}
+
+// Gemma 4 API
 async function generateWithGemma(message, history) {
     if (!CLOUDFLARE_ACCOUNT_ID || !CLOUDFLARE_API_TOKEN) {
         throw new Error(
@@ -132,41 +165,38 @@ async function generateWithGemma(message, history) {
         ...sanitizeCloudflareMessages(history, message)
     ];
 
-const endpoint =
-    `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/${MODEL_GEMMA_SPEED}`;
+    const endpoint =
+        `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/${MODEL_GEMMA_SPEED}`;
 
-const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-        "Authorization": `Bearer ${CLOUDFLARE_API_TOKEN}`,
-        "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-        messages,
-        temperature: 0.7,
-        max_tokens: 8192,
-        chat_template_kwargs: {
-            enable_thinking: false
-        }
-    })
-});
+    const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${CLOUDFLARE_API_TOKEN}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            messages,
+            temperature: 0.7,
+            max_completion_tokens: 8192,
+            chat_template_kwargs: {
+                enable_thinking: false
+            }
+        })
+    });
 
-let data;
-
-try {
-    data = await response.json();
-} catch (parseError) {
-    throw new Error(
-        `Cloudflare Workers AI returned an unreadable response (HTTP ${response.status}).`
-    );
-}
+    let data;
+    try {
+        data = await response.json();
+    } catch (parseError) {
+        throw new Error(
+            `Cloudflare Workers AI returned an unreadable response (HTTP ${response.status}).`
+        );
     }
 
-    if (!response.ok || data.success === false) {
-        const apiErrors = Array.isArray(data.errors)
-            ? data.errors.map(
-                (item) =>
-                    item.message || item.code || JSON.stringify(item)
+    if (!response.ok || data?.success === false) {
+        const apiErrors = Array.isArray(data?.errors)
+            ? data.errors.map((item) =>
+                item.message || item.code || JSON.stringify(item)
             ).join("; ")
             : "";
 
@@ -175,38 +205,66 @@ try {
         );
     }
 
-    const resultData = data?.result ?? data;
+    // Native /ai/run response commonly wraps model output in result.response.
+    // Also tolerate chat-completions-shaped output in case Cloudflare changes
+    // or proxies the response format.
+    const resultData = data && data.result !== undefined ? data.result : data;
+    const candidates = [
+        resultData && resultData.response,
+        resultData && resultData.choices &&
+            resultData.choices[0] && resultData.choices[0].message &&
+            resultData.choices[0].message.content,
+        resultData && resultData.choices &&
+            resultData.choices[0] && resultData.choices[0].text,
+        resultData && resultData.output_text,
+        resultData && resultData.text,
+        resultData && resultData.generated_text,
+        data && data.response,
+        typeof resultData === "string" ? resultData : null
+    ];
 
-const generatedText =
-    resultData?.choices?.[0]?.message?.content ??
-    resultData?.choices?.[0]?.text ??
-    resultData?.response ??
-    resultData?.output_text ??
-    resultData?.text ??
-    data?.response ??
-    (typeof resultData === "string" ? resultData : null);
+    let generatedText = null;
+    for (const candidate of candidates) {
+        const candidateText = extractTextContent(candidate);
+        if (typeof candidateText === "string" && candidateText.trim()) {
+            generatedText = candidateText.trim();
+            break;
+        }
+    }
 
-    if (typeof generatedText !== "string" || !generatedText.trim()) {
+    if (!generatedText) {
+        const returnedFields = resultData && typeof resultData === "object"
+            ? Object.keys(resultData).join(", ")
+            : typeof resultData;
         throw new Error(
-            "Cloudflare Workers AI returned an empty or unexpected response format."
+            `Cloudflare Workers AI returned an empty or unexpected response format. Returned fields: ${returnedFields || "none"}`
         );
     }
 
-    return generatedText.trim();
+    return generatedText;
 }
 
 // Main chat API
 app.post("/api/chat", async (req, res) => {
-    const { message, history, model } = req.body || {};
-
+    const body = req.body || {};
+    const message = typeof body.message === "string" ? body.message.trim() : "";
+    const history = body.history;
     const requestedType =
-        (typeof model === "string" ? model : "gemini-flash").toLowerCase();
+        (typeof body.model === "string" ? body.model : "gemini-flash").toLowerCase();
 
-    const geminiHistory = sanitizeHistory(history);
+    if (!message) {
+        return res.status(400).json({
+            output: {
+                role: "assistant",
+                content: "Please enter a message."
+            }
+        });
+    }
+
+    const geminiHistory = sanitizeHistory(history, message);
 
     try {
-
-        // PRO MODE - Gemini 2.5 Flash
+        // PRO MODE: Gemini 2.5 Flash (Google Search enabled as before)
         if (
             requestedType.includes("pro") ||
             requestedType.includes("deep")
@@ -249,7 +307,7 @@ app.post("/api/chat", async (req, res) => {
             });
         }
 
-        // SPEED MODE - Cloudflare Gemma 4
+        // SPEED MODE: Cloudflare-hosted Gemma 4
         else if (
             requestedType.includes("speed") ||
             requestedType.includes("flash") ||
@@ -269,8 +327,11 @@ app.post("/api/chat", async (req, res) => {
             });
         }
 
-        // Existing Turbo branch retained
-        else if (requestedType.includes("turbo")) {
+        // TURBO MODE: Accept both frontend "groq" and legacy "turbo".
+        else if (
+            requestedType.includes("turbo") ||
+            requestedType === "groq"
+        ) {
             if (!genAI) {
                 return res.json({
                     output: {
@@ -280,13 +341,11 @@ app.post("/api/chat", async (req, res) => {
                 });
             }
 
-            const displayModelName =
-                MODEL_GROQ.replace("gemini-", "");
-
-            console.log(`Using Model: ${MODEL_GROQ}`);
+            const displayModelName = MODEL_TURBO.replace("gemini-", "");
+            console.log(`Using Turbo mode model: ${MODEL_TURBO}`);
 
             const modelInstance = genAI.getGenerativeModel({
-                model: MODEL_GROQ,
+                model: MODEL_TURBO,
                 systemInstruction: SYSTEM_INSTRUCTION_INDRESH
             });
 
@@ -317,7 +376,6 @@ app.post("/api/chat", async (req, res) => {
                 content: "❌ Error: Unknown Model Requested"
             }
         });
-
     } catch (error) {
         console.error("Server Error:", error.message);
 
@@ -328,7 +386,7 @@ app.post("/api/chat", async (req, res) => {
                 "⚠️ API Error: Model or endpoint not found. Check the configured model ID.";
         } else if (error.message.includes("429")) {
             userMsg =
-                "⚠️ Cloudflare/Gemini request limit or capacity reached. Check your provider usage and try again later.";
+                "⚠️ Cloudflare/Gemini request limit or capacity reached. Check provider usage and try again later.";
         }
 
         return res.json({
@@ -341,7 +399,7 @@ app.post("/api/chat", async (req, res) => {
 });
 
 // Serve frontend
-if (require("fs").existsSync(PUBLIC_DIR)) {
+if (fs.existsSync(PUBLIC_DIR)) {
     app.use(express.static(PUBLIC_DIR));
     app.get("/", (req, res) =>
         res.sendFile(path.join(PUBLIC_DIR, "index.html"))
