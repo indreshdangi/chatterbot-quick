@@ -1,18 +1,15 @@
-
- // backend/server.js
- // INDRESH 2.0 - Render deployment
+// backend/server.js
+// INDRESH 2.0 - Render deployment
 
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
 const rateLimit = require("express-rate-limit");
 require("dotenv").config();
 
 const app = express();
 
-// Existing middleware
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
@@ -25,26 +22,19 @@ app.use(limiter);
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
 
-// Gemini configuration
+// API keys
 const GEMINI_KEY = (process.env.GEMINI_KEY || "").trim();
-const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
-
-// Cloudflare Workers AI configuration
 const CLOUDFLARE_ACCOUNT_ID =
     (process.env.CLOUDFLARE_ACCOUNT_ID || "").trim();
-
 const CLOUDFLARE_API_TOKEN =
     (process.env.CLOUDFLARE_API_TOKEN || "").trim();
 
 // Model routing
-// Frontend sends: gemini-flash -> Speed, gemini-pro -> Pro, groq -> Turbo.
 const MODEL_GEMMA_SPEED = "@cf/google/gemma-4-26b-a4b-it";
-const MODEL_PRO = "gemini-2.5-flash";
+const MODEL_CLOUDFLARE_PRO = "@cf/nvidia/nemotron-3-120b-a12b";
+const MODEL_GEMINI_SEARCH = "gemini-2.5-flash-lite";
 
-// Turbo mode: supported lightweight Gemini 2.5 model.
-const MODEL_TURBO = "gemini-2.5-flash-lite";
-
-// Original system prompt
+// Original system prompt for Gemini Search mode
 const SYSTEM_INSTRUCTION_INDRESH = `
 You are Indresh 2.0, a smart, friendly, and highly intelligent AI assistant.
 
@@ -58,19 +48,18 @@ CRITICAL IDENTITY RULES:
 
 4. **Formatting Fix:** ALWAYS write standard email addresses (e.g., example@domain.com). NEVER write the words "dot" or "at". Write numbers properly.
 
-5. **Capabilities:** USE GOOGLE SEARCH tool for real-time facts and current affairs. Provide minute, deep researched details if asked.
+5. **Capabilities:** Use Google Search grounding when it can improve factual accuracy, especially for current events, local information, prices, schedules, and recent updates. Distinguish confirmed information from uncertainty and cite sources returned by Google Search.
 `;
 
-// Gemma does not receive Gemini's native Google Search tool.
-const SYSTEM_INSTRUCTION_GEMMA = SYSTEM_INSTRUCTION_INDRESH.replace(
-    "5. **Capabilities:** USE GOOGLE SEARCH tool for real-time facts and current affairs. Provide minute, deep researched details if asked.",
-    "5. **Capabilities:** If live web search is unavailable, do not claim to have searched or verified current facts. Clearly say when information needs current verification."
+// Cloudflare models do not have Google's built-in Search tool.
+const SYSTEM_INSTRUCTION_CLOUDFLARE = SYSTEM_INSTRUCTION_INDRESH.replace(
+    "5. **Capabilities:** Use Google Search grounding when it can improve factual accuracy, especially for current events, local information, prices, schedules, and recent updates. Distinguish confirmed information from uncertainty and cite sources returned by Google Search.",
+    "5. **Capabilities:** You do not have live web search in this mode. Do not claim to have searched or verified current facts. Clearly state when information may be outdated and needs current verification."
 );
 
 // Convert browser chat history to Gemini's expected format.
-// The browser already includes the current user message in history before
-// calling /api/chat, so remove that final copy before sendMessage() to avoid
-// sending the current message twice.
+// The browser includes the current user message in history before the API call,
+// so remove that final copy; it is appended separately below.
 function sanitizeHistory(history, currentMessage) {
     if (!Array.isArray(history) || history.length === 0) return [];
 
@@ -102,9 +91,7 @@ function sanitizeHistory(history, currentMessage) {
     return formatted;
 }
 
-// Convert browser chat history to Cloudflare's messages format.
-// The current user message is already in browser history; append it only if
-// it is not already the last message.
+// Convert browser history to Cloudflare's messages format.
 function sanitizeCloudflareMessages(history, currentMessage) {
     const formatted = Array.isArray(history)
         ? history.map((msg) => ({
@@ -118,7 +105,6 @@ function sanitizeCloudflareMessages(history, currentMessage) {
     }
 
     const lastMessage = formatted[formatted.length - 1];
-
     if (
         !lastMessage ||
         lastMessage.role !== "user" ||
@@ -133,7 +119,6 @@ function sanitizeCloudflareMessages(history, currentMessage) {
     return formatted;
 }
 
-// Normalize possible Workers AI text response shapes.
 function extractTextContent(value) {
     if (typeof value === "string") return value;
 
@@ -149,8 +134,13 @@ function extractTextContent(value) {
     return null;
 }
 
-// Gemma 4 API
-async function generateWithGemma(message, history) {
+// Shared Cloudflare Workers AI runner for Speed and Pro.
+async function generateWithCloudflare(
+    modelId,
+    message,
+    history,
+    options = {}
+) {
     if (!CLOUDFLARE_ACCOUNT_ID || !CLOUDFLARE_API_TOKEN) {
         throw new Error(
             "Cloudflare credentials missing. Check CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN in Render Environment."
@@ -160,13 +150,26 @@ async function generateWithGemma(message, history) {
     const messages = [
         {
             role: "system",
-            content: SYSTEM_INSTRUCTION_GEMMA
+            content: SYSTEM_INSTRUCTION_CLOUDFLARE
         },
         ...sanitizeCloudflareMessages(history, message)
     ];
 
+    const requestBody = {
+        messages,
+        temperature: options.temperature ?? 0.7,
+        max_completion_tokens: options.maxCompletionTokens ?? 8192
+    };
+
+    if (options.topP !== undefined) {
+        requestBody.top_p = options.topP;
+    }
+    if (options.chatTemplateKwargs) {
+        requestBody.chat_template_kwargs = options.chatTemplateKwargs;
+    }
+
     const endpoint =
-        `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/${MODEL_GEMMA_SPEED}`;
+        `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/${modelId}`;
 
     const response = await fetch(endpoint, {
         method: "POST",
@@ -174,14 +177,7 @@ async function generateWithGemma(message, history) {
             "Authorization": `Bearer ${CLOUDFLARE_API_TOKEN}`,
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-            messages,
-            temperature: 0.7,
-            max_completion_tokens: 8192,
-            chat_template_kwargs: {
-                enable_thinking: false
-            }
-        })
+        body: JSON.stringify(requestBody)
     });
 
     let data;
@@ -205,9 +201,6 @@ async function generateWithGemma(message, history) {
         );
     }
 
-    // Native /ai/run response commonly wraps model output in result.response.
-    // Also tolerate chat-completions-shaped output in case Cloudflare changes
-    // or proxies the response format.
     const resultData = data && data.result !== undefined ? data.result : data;
     const candidates = [
         resultData && resultData.response,
@@ -244,13 +237,139 @@ async function generateWithGemma(message, history) {
     return generatedText;
 }
 
+// Gemini 2.5 Flash-Lite + built-in Google Search grounding.
+// This is the selected Free Tier Search route (up to 500 RPD shared with
+// Gemini 2.5 Flash, subject to the active project's quota and eligibility).
+async function generateWithGeminiSearch(message, history) {
+    if (!GEMINI_KEY) {
+        throw new Error("Gemini API key missing. Add GEMINI_KEY in Render Environment.");
+    }
+
+    const priorMessages = sanitizeHistory(history, message);
+    const contents = [
+        ...priorMessages,
+        {
+            role: "user",
+            parts: [{ text: message }]
+        }
+    ];
+
+    const endpoint =
+        `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_GEMINI_SEARCH}:generateContent`;
+
+    const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+            "x-goog-api-key": GEMINI_KEY,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            systemInstruction: {
+                parts: [{ text: SYSTEM_INSTRUCTION_INDRESH }]
+            },
+            contents,
+            tools: [{ google_search: {} }],
+            generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 8192
+            }
+        })
+    });
+
+    let data;
+    try {
+        data = await response.json();
+    } catch (parseError) {
+        throw new Error(
+            `Gemini Search returned an unreadable response (HTTP ${response.status}).`
+        );
+    }
+
+    if (!response.ok) {
+        const apiMessage =
+            data?.error?.message ||
+            data?.message ||
+            `HTTP ${response.status}`;
+
+        if (response.status === 429) {
+            throw new Error(
+                `Google Search quota/rate limit reached. The Free Tier allowance is up to 500 requests per day, shared by Gemini 2.5 Flash and Flash-Lite. Details: ${apiMessage}`
+            );
+        }
+
+        if (
+            response.status === 403 ||
+            (response.status === 400 && /ground|search|tool|model/i.test(apiMessage))
+        ) {
+            throw new Error(
+                `Google Search is unavailable for this API project/model or its current Free Tier access. Check the project's AI Studio quota and model access. Details: ${apiMessage}`
+            );
+        }
+
+        throw new Error(`Gemini Search API HTTP ${response.status}: ${apiMessage}`);
+    }
+
+    const candidate = data?.candidates?.[0];
+    const responseParts = candidate?.content?.parts || [];
+    const answer = responseParts
+        .filter((part) => typeof part.text === "string")
+        .map((part) => part.text)
+        .join("")
+        .trim();
+
+    if (!answer) {
+        const blockReason = candidate?.finishReason || data?.promptFeedback?.blockReason;
+        throw new Error(
+            `Gemini Search returned no text${blockReason ? ` (reason: ${blockReason})` : ""}.`
+        );
+    }
+
+    // Include source links from Google's grounding metadata in the existing
+    // Markdown bubble so users can open the sources used in the answer.
+    const groundingChunks =
+        candidate?.groundingMetadata?.groundingChunks ||
+        candidate?.groundingMetadata?.grounding_chunks ||
+        [];
+
+    const sources = [];
+    const seenUrls = new Set();
+
+    for (const chunk of groundingChunks) {
+        const web = chunk?.web || chunk?.retrievedContext;
+        const uri = web?.uri || web?.url;
+        const title = (web?.title || web?.displayName || "Source")
+            .replace(/[\[\]]/g, "");
+
+        if (!uri || seenUrls.has(uri)) continue;
+
+        try {
+            const parsedUrl = new URL(uri);
+            if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
+                continue;
+            }
+            seenUrls.add(uri);
+            sources.push(`- [${title}](${uri})`);
+        } catch (e) {
+            // Ignore malformed source URLs.
+        }
+
+        if (sources.length >= 6) break;
+    }
+
+    return sources.length
+        ? `${answer}\n\n**Sources**\n${sources.join("\n")}`
+        : answer;
+}
+
 // Main chat API
 app.post("/api/chat", async (req, res) => {
     const body = req.body || {};
     const message = typeof body.message === "string" ? body.message.trim() : "";
     const history = body.history;
     const requestedType =
-        (typeof body.model === "string" ? body.model : "gemini-flash").toLowerCase();
+        (typeof body.model === "string" ? body.model : "cloudflare-speed").toLowerCase();
+    const searchEnabled =
+        body.searchEnabled === true || requestedType === "gemini-search";
 
     if (!message) {
         return res.status(400).json({
@@ -261,54 +380,79 @@ app.post("/api/chat", async (req, res) => {
         });
     }
 
-    const geminiHistory = sanitizeHistory(history, message);
-
-    try {
-        // PRO MODE: Gemini 2.5 Flash (Google Search enabled as before)
-        if (
-            requestedType.includes("pro") ||
-            requestedType.includes("deep")
-        ) {
-            if (!genAI) {
-                return res.json({
-                    output: {
-                        role: "assistant",
-                        content: "❌ Error: Gemini API Key Missing"
-                    }
-                });
-            }
-
-            console.log(`Using Pro mode model: ${MODEL_PRO}`);
-
-            const modelInstance = genAI.getGenerativeModel({
-                model: MODEL_PRO,
-                systemInstruction: SYSTEM_INSTRUCTION_INDRESH,
-                tools: [{ googleSearch: {} }]
-            });
-
-            const chat = modelInstance.startChat({
-                history: geminiHistory,
-                generationConfig: {
-                    temperature: 0.7,
-                    maxOutputTokens: 8192
-                }
-            });
-
-            const result = await chat.sendMessage(message);
-            const response = await result.response;
-            const text = response.text();
+    // Search button overrides the selected Cloudflare mode only while ON.
+    if (searchEnabled) {
+        try {
+            console.log(`Using Google Search model: ${MODEL_GEMINI_SEARCH}`);
+            const text = await generateWithGeminiSearch(message, history);
 
             return res.json({
                 output: {
                     role: "assistant",
                     content: text,
-                    via: "Indresh (2.5 Flash - Pro)"
+                    via: "Indresh (Google Search · Gemini 2.5 Flash-Lite)"
+                }
+            });
+        } catch (error) {
+            console.error("Gemini Search Error:", error.message);
+            return res.json({
+                output: {
+                    role: "assistant",
+                    content: `⚠️ ${error.message}`
+                }
+            });
+        }
+    }
+
+    // Offline mode is a UI placeholder for a future local model.
+    if (
+        requestedType === "offline" ||
+        requestedType === "groq" ||
+        requestedType.includes("turbo")
+    ) {
+        return res.json({
+            output: {
+                role: "assistant",
+                content: "💻 Offline Mode is coming soon. This option will be available in a future update.",
+                via: "Coming Soon"
+            }
+        });
+    }
+
+    try {
+        // PRO MODE: Cloudflare-hosted NVIDIA Nemotron 3 Super 120B.
+        if (
+            requestedType.includes("pro") ||
+            requestedType.includes("deep")
+        ) {
+            console.log(`Using Pro mode model: ${MODEL_CLOUDFLARE_PRO}`);
+
+            const text = await generateWithCloudflare(
+                MODEL_CLOUDFLARE_PRO,
+                message,
+                history,
+                {
+                    temperature: 1.0,
+                    topP: 0.95,
+                    maxCompletionTokens: 4096,
+                    chatTemplateKwargs: {
+                        enable_thinking: true,
+                        low_effort: true
+                    }
+                }
+            );
+
+            return res.json({
+                output: {
+                    role: "assistant",
+                    content: text,
+                    via: "Indresh (Nemotron 3 Super Pro)"
                 }
             });
         }
 
-        // SPEED MODE: Cloudflare-hosted Gemma 4
-        else if (
+        // SPEED MODE: Cloudflare-hosted Gemma 4.
+        if (
             requestedType.includes("speed") ||
             requestedType.includes("flash") ||
             requestedType.includes("gemini") ||
@@ -316,56 +460,24 @@ app.post("/api/chat", async (req, res) => {
         ) {
             console.log(`Using Speed mode model: ${MODEL_GEMMA_SPEED}`);
 
-            const text = await generateWithGemma(message, history);
+            const text = await generateWithCloudflare(
+                MODEL_GEMMA_SPEED,
+                message,
+                history,
+                {
+                    temperature: 0.7,
+                    maxCompletionTokens: 8192,
+                    chatTemplateKwargs: {
+                        enable_thinking: false
+                    }
+                }
+            );
 
             return res.json({
                 output: {
                     role: "assistant",
                     content: text,
                     via: "Indresh (Gemma 4 Speed)"
-                }
-            });
-        }
-
-        // TURBO MODE: Accept both frontend "groq" and legacy "turbo".
-        else if (
-            requestedType.includes("turbo") ||
-            requestedType === "groq"
-        ) {
-            if (!genAI) {
-                return res.json({
-                    output: {
-                        role: "assistant",
-                        content: "❌ Error: AI Key Missing"
-                    }
-                });
-            }
-
-            const displayModelName = MODEL_TURBO.replace("gemini-", "");
-            console.log(`Using Turbo mode model: ${MODEL_TURBO}`);
-
-            const modelInstance = genAI.getGenerativeModel({
-                model: MODEL_TURBO,
-                systemInstruction: SYSTEM_INSTRUCTION_INDRESH
-            });
-
-            const chat = modelInstance.startChat({
-                history: geminiHistory,
-                generationConfig: {
-                    temperature: 0.7,
-                    maxOutputTokens: 8192
-                }
-            });
-
-            const result = await chat.sendMessage(message);
-            const response = await result.response;
-            const text = response.text();
-
-            return res.json({
-                output: {
-                    role: "assistant",
-                    content: text,
-                    via: `Indresh (${displayModelName})`
                 }
             });
         }
@@ -383,10 +495,13 @@ app.post("/api/chat", async (req, res) => {
 
         if (error.message.includes("404")) {
             userMsg =
-                "⚠️ API Error: Model or endpoint not found. Check the configured model ID.";
+                "⚠️ API Error: Model or endpoint not found. Check the configured Cloudflare model ID and access.";
         } else if (error.message.includes("429")) {
             userMsg =
-                "⚠️ Cloudflare/Gemini request limit or capacity reached. Check provider usage and try again later.";
+                "⚠️ Cloudflare Workers AI daily Neurons limit or capacity reached. Check Workers AI usage and try again later.";
+        } else if (error.message.includes("403")) {
+            userMsg =
+                "⚠️ This Cloudflare model may require a paid plan or may be unavailable to this account. Details: " + error.message;
         }
 
         return res.json({
