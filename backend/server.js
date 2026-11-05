@@ -51,7 +51,7 @@ const CLOUDFLARE_API_TOKEN =
 // Model routing
 const MODEL_GEMMA_SPEED = "@cf/google/gemma-4-26b-a4b-it";
 const MODEL_CLOUDFLARE_PRO = "@cf/nvidia/nemotron-3-120b-a12b";
-const MODEL_GEMINI_SEARCH = "gemini-2.5-flash-lite";
+const MODEL_GEMINI_SEARCH = "gemini-3.5-flash-lite";
 
 // Original system prompt for Gemini Search mode
 const SYSTEM_INSTRUCTION_INDRESH = `
@@ -256,9 +256,9 @@ async function generateWithCloudflare(
     return generatedText;
 }
 
-// Gemini 2.5 Flash-Lite + built-in Google Search grounding.
+// Gemini 3.5 Flash-Lite + built-in Google Search grounding.
 // This is the selected Free Tier Search route (up to 500 RPD shared with
-// Gemini 2.5 Flash, subject to the active project's quota and eligibility).
+// Gemini 3.5 Flash, subject to the active project's quota and eligibility).
 async function generateWithGeminiSearch(message, history) {
     if (!GEMINI_KEY) {
         throw new Error("Gemini API key missing. Add GEMINI_KEY in Render Environment.");
