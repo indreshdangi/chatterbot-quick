@@ -40,10 +40,11 @@
     }
     
     .card{
-        width:100%; max-width:900px; height:100%; 
-        background:var(--glass-bg); 
+        width:100%; max-width:900px; height:100%;
+        background:var(--glass-bg);
         backdrop-filter: blur(var(--blur)); -webkit-backdrop-filter: blur(var(--blur));
         display:flex; flex-direction:column; overflow:hidden;
+        position:relative; isolation:isolate;
         transition: all 0.3s ease;
     }
     @media(min-width: 600px) { .card { height: 90vh; border-radius: 18px; border: 1px solid var(--border); box-shadow: 0 25px 50px rgba(0,0,0,0.3); } }
@@ -125,49 +126,151 @@
     button#sendBtn:active { transform: scale(0.9); }
     
     #geminiSubSelect {
-        display: none; padding: 8px; font-size: 11px;
+        display: inline-block; padding: 8px; font-size: 11px;
         max-width: 112px; border-radius: 8px; flex-shrink: 0;
         background: var(--user); border: 1px solid var(--accent);
         color: var(--text); text-overflow: ellipsis; font-weight: 700;
     }
 
+    .input-shell {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 7px 4px 5px;
+        border: 1px solid var(--border);
+        border-radius: 28px;
+        background: rgba(255,255,255,0.16);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 5px 18px rgba(25,20,55,0.08);
+        transition: border-color .25s ease, box-shadow .25s ease, background .25s ease;
+    }
+    .input-shell:focus-within {
+        border-color: var(--accent);
+        background: rgba(255,255,255,0.22);
+        box-shadow: 0 0 0 3px rgba(91,54,214,0.12), 0 8px 24px rgba(45,35,100,0.12);
+    }
+    .input-shell input {
+        flex: 1 1 auto;
+        min-width: 0;
+        width: 100%;
+        border: 0;
+        outline: 0;
+        box-shadow: none !important;
+        background: transparent;
+        color: var(--text);
+        padding: 10px 8px;
+        border-radius: 22px;
+    }
+    .input-shell input:focus { box-shadow: none !important; }
     .search-toggle {
-        display: inline-flex !important;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
-        visibility: visible !important;
-        opacity: 1 !important;
-        position: relative;
-        z-index: 20;
+        gap: 5px;
         flex: 0 0 auto;
-        padding: 8px 10px;
-        border-radius: 10px;
-        border: 1px solid var(--border);
-        background: var(--user);
+        min-height: 34px;
+        padding: 7px 11px;
+        border-radius: 20px;
+        border: 1px solid rgba(255,255,255,0.25);
+        background: rgba(255,255,255,0.28);
         color: var(--text);
         font-size: 11px;
         font-weight: 700;
         white-space: nowrap;
         cursor: pointer;
-        flex-shrink: 0;
-        transition: all 0.2s ease;
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        transition: transform .22s ease, background .22s ease, box-shadow .22s ease, border-color .22s ease;
     }
+    .search-toggle:hover { transform: translateY(-1px); border-color: var(--accent); }
+    .search-toggle:active { transform: scale(.96); }
     .search-toggle.active {
-        background: var(--accent);
-        border-color: var(--accent);
         color: #fff;
-        box-shadow: 0 0 0 2px rgba(91,54,214,0.12);
+        border-color: transparent;
+        background: linear-gradient(120deg, #5b36d6, #8b5cf6 55%, #5267df);
+        box-shadow: 0 0 0 1px rgba(139,92,246,.18), 0 0 18px rgba(124,77,255,.35);
+        animation: search-glow 2.8s ease-in-out infinite;
     }
-    .search-toggle:disabled {
-        opacity: 0.45;
-        cursor: not-allowed;
+    #geminiSubSelect[hidden], .search-toggle[hidden] { display: none !important; }
+    .search-toggle:disabled { opacity: .45; cursor: not-allowed; }
+    @keyframes search-glow {
+        0%,100% { box-shadow: 0 0 0 1px rgba(139,92,246,.18), 0 0 12px rgba(124,77,255,.22); }
+        50% { box-shadow: 0 0 0 3px rgba(139,92,246,.10), 0 0 22px rgba(124,77,255,.42); }
+    }
+
+    .msg { animation: message-arrive .24s ease both; }
+    @keyframes message-arrive {
+        from { opacity: 0; transform: translateY(7px) scale(.995); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .via-tag { font-size: 10px; letter-spacing: .02em; opacity: .42; margin: 5px 0 0 7px; }
+
+    .offline-overlay {
+        position: absolute;
+        inset: 62px 0 0;
+        z-index: 50;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        overflow: hidden;
+        background: rgba(11, 12, 25, .58);
+        backdrop-filter: blur(22px) saturate(125%);
+        -webkit-backdrop-filter: blur(22px) saturate(125%);
+    }
+    .offline-overlay.is-visible { display: flex; animation: overlay-in .28s ease both; }
+    @keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+    .offline-panel {
+        position: relative;
+        width: min(430px, 100%);
+        padding: 34px 28px 30px;
+        border: 1px solid rgba(255,255,255,.19);
+        border-radius: 28px;
+        text-align: center;
+        color: #f5f3ff;
+        background: linear-gradient(145deg, rgba(41,39,78,.83), rgba(20,24,48,.78));
+        box-shadow: 0 24px 80px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.13);
+        overflow: hidden;
+        animation: offline-float 5s ease-in-out infinite;
+    }
+    .offline-panel::before, .offline-panel::after {
+        content: ""; position: absolute; width: 190px; height: 190px; border-radius: 50%;
+        filter: blur(35px); opacity: .3; pointer-events: none;
+    }
+    .offline-panel::before { background: #855cff; top: -110px; left: -70px; }
+    .offline-panel::after { background: #3d9dff; bottom: -125px; right: -65px; }
+    @keyframes offline-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+    .offline-orb {
+        width: 112px; height: 112px; margin: 0 auto 23px; border-radius: 50%;
+        display: grid; place-items: center; position: relative;
+        background: radial-gradient(circle at 35% 28%, rgba(255,255,255,.32), rgba(127,91,255,.18) 42%, rgba(30,40,90,.55));
+        border: 1px solid rgba(255,255,255,.28);
+        box-shadow: 0 0 35px rgba(132,96,255,.27), inset 0 0 25px rgba(255,255,255,.1);
+    }
+    .offline-orb::before, .offline-orb::after {
+        content: ""; position: absolute; inset: -10px; border: 1px solid rgba(195,181,255,.32); border-radius: 50%;
+        animation: orb-ring 4s linear infinite;
+    }
+    .offline-orb::after { inset: -19px; border-style: dashed; opacity: .55; animation-duration: 12s; animation-direction: reverse; }
+    @keyframes orb-ring { to { transform: rotate(360deg); } }
+    .offline-orb span { font-size: 42px; filter: drop-shadow(0 5px 16px rgba(0,0,0,.35)); }
+    .offline-kicker { display: inline-block; padding: 6px 11px; border-radius: 99px; color: #d9d0ff; background: rgba(151,125,255,.16); border: 1px solid rgba(190,174,255,.22); font-size: 10px; font-weight: 800; letter-spacing: .18em; }
+    .offline-panel h2 { position: relative; margin: 15px 0 7px; font-size: clamp(23px, 5vw, 30px); letter-spacing: -.03em; }
+    .offline-panel p { position: relative; margin: 0; color: rgba(240,239,255,.72); font-size: 14px; line-height: 1.6; }
+    .offline-coming { position: relative; display: inline-block; margin-top: 20px; padding: 9px 17px; border-radius: 99px; font-size: 11px; font-weight: 800; letter-spacing: .13em; color: #fff; background: linear-gradient(100deg, #6850d9, #4979d9); box-shadow: 0 7px 24px rgba(94,91,224,.27); }
+    @media (prefers-reduced-motion: reduce) {
+        .search-toggle.active, .offline-panel, .offline-orb::before, .offline-orb::after, .msg { animation: none !important; }
     }
 
     @media(max-width: 420px) {
-        .footer { gap: 4px; padding: 8px 7px; }
-        #geminiSubSelect { max-width: 92px; padding: 7px 6px; }
-        .search-toggle { padding: 7px 7px; font-size: 10px; }
-        input { min-width: 35px; padding: 10px 10px; }
+        .footer { gap: 5px; padding: 8px 7px; }
+        #geminiSubSelect { max-width: 75px; padding: 7px 5px; font-size: 11px; }
+        .search-toggle { min-height: 31px; padding: 6px 8px; font-size: 10px; }
+        .input-shell { gap: 2px; padding: 3px 5px 3px 3px; }
+        .input-shell input { padding: 9px 5px; font-size: 14px; }
     }
 
     .disclaimer {
@@ -188,9 +291,19 @@
       <div class="controls">
           <button class="theme-btn" id="themeToggle" title="Change Theme">🌙</button>
           <select id="providerSelect" aria-label="Chat mode">
-              <option value="offline">💻 Offline Mode</option>
-              <option value="gemini" selected>🧠 Intelligent Mode</option>
+              <option value="online" selected>☁ Online Mode</option>
+              <option value="offline">◉ Offline Mode</option>
           </select>
+      </div>
+    </div>
+
+    <div class="offline-overlay" id="offlineOverlay" aria-hidden="true">
+      <div class="offline-panel" role="status" aria-live="polite">
+        <div class="offline-orb" aria-hidden="true"><span>⌘</span></div>
+        <div class="offline-kicker">A NEW EXPERIENCE IS ON THE WAY</div>
+        <h2>Offline Mode</h2>
+        <p>Work without an internet connection.<br>We are preparing this feature for a future update.</p>
+        <div class="offline-coming">COMING SOON</div>
       </div>
     </div>
 
@@ -200,21 +313,30 @@
 
     <div class="footer-container">
         <div class="footer">
-            <select id="geminiSubSelect" aria-label="AI model">
-                <option value="flash">🚀 Speed (Gemma 4)</option>
-                <option value="pro">💎 Pro (Nemotron 3)</option>
+            <select id="geminiSubSelect" aria-label="Response mode">
+                <option value="flash">⚡ Speed</option>
+                <option value="pro">💎 Deep</option>
             </select>
-            <button id="searchToggle" class="search-toggle" type="button"
-                    aria-pressed="false" title="Use Gemini with Google Search">🌐 Search</button>
-            <input id="input" type="text" placeholder="Message..." autofocus autocomplete="off">
-            <button id="sendBtn">➤</button>
+            <div class="input-shell" id="inputShell">
+                <button id="searchToggle" class="search-toggle" type="button"
+                        aria-pressed="false" title="Search the web with Google">⌕ Search</button>
+                <input id="input" type="text" placeholder="Message..." autofocus autocomplete="off">
+            </div>
+            <button id="sendBtn" aria-label="Send message" title="Send">➤</button>
         </div>
         <div class="disclaimer">Indresh 2.0 can make mistakes, so double-check it.</div>
     </div>
   </div>
 
 <script>
-  if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js?v=3')); }
+  // Network-first HTML navigation and cache version v4 prevent stale UI.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js?v=4').catch(error => {
+        console.warn('Service worker registration failed:', error);
+      });
+    });
+  }
 
   const msgs = document.getElementById('messages');
   const inp = document.getElementById('input');
@@ -223,163 +345,229 @@
   const geminiSubSelect = document.getElementById('geminiSubSelect');
   const searchToggle = document.getElementById('searchToggle');
   const themeBtn = document.getElementById('themeToggle');
+  const offlineOverlay = document.getElementById('offlineOverlay');
 
-  marked.use({ breaks: true });
+  if (window.marked && typeof window.marked.use === 'function') {
+    window.marked.use({ breaks: true });
+  }
+
   let chatHistory = [];
   let searchEnabled = false;
+  let sending = false;
+
+  function renderMarkdown(text) {
+    if (window.marked && typeof window.marked.parse === 'function') {
+      return window.marked.parse(text);
+    }
+    const safe = document.createElement('div');
+    safe.textContent = text;
+    return safe.innerHTML.replace(/\n/g, '<br>');
+  }
+
+  function addBrandTag(messageDiv) {
+    const tag = document.createElement('div');
+    tag.className = 'via-tag';
+    tag.textContent = 'Indresh';
+    messageDiv.appendChild(tag);
+  }
 
   function updateUI() {
     const offlineMode = providerSelect.value === 'offline';
+    const deepMode = geminiSubSelect.value === 'pro';
+    const canSearch = !offlineMode && !deepMode;
 
-    geminiSubSelect.style.display = offlineMode ? 'none' : 'block';
-    searchToggle.disabled = offlineMode;
+    geminiSubSelect.hidden = offlineMode;
+    geminiSubSelect.disabled = offlineMode;
+    searchToggle.hidden = !canSearch;
+    searchToggle.disabled = !canSearch;
+    inp.disabled = offlineMode || sending;
+    btn.disabled = offlineMode || sending;
+
+    if (!canSearch && searchEnabled) {
+      searchEnabled = false;
+    }
+    searchToggle.classList.toggle('active', searchEnabled);
+    searchToggle.setAttribute('aria-pressed', String(searchEnabled));
+    searchToggle.textContent = searchEnabled ? '✓ Search ON' : '⌕ Search';
+
+    offlineOverlay.classList.toggle('is-visible', offlineMode);
+    offlineOverlay.setAttribute('aria-hidden', String(!offlineMode));
+    msgs.inert = offlineMode;
 
     if (offlineMode) {
-        inp.placeholder = "Offline mode — coming soon...";
+      inp.placeholder = 'Offline mode is coming soon';
     } else if (searchEnabled) {
-        inp.placeholder = "Search current information with Google...";
-    } else if (geminiSubSelect.value === 'pro') {
-        inp.placeholder = "Ask Indresh Pro...";
+      inp.placeholder = 'Search the web with Google...';
+    } else if (deepMode) {
+      inp.placeholder = 'Ask a deeper question...';
     } else {
-        inp.placeholder = "Ask Indresh...";
+      inp.placeholder = 'Message Indresh...';
     }
   }
 
   function setSearchEnabled(enabled) {
-    searchEnabled = Boolean(enabled) && providerSelect.value === 'gemini';
-    searchToggle.classList.toggle('active', searchEnabled);
-    searchToggle.setAttribute('aria-pressed', String(searchEnabled));
-    searchToggle.textContent = searchEnabled ? '🌐 Search ON' : '🌐 Search';
+    const allowed = providerSelect.value === 'online' && geminiSubSelect.value === 'flash';
+    searchEnabled = Boolean(enabled) && allowed;
     updateUI();
   }
 
   providerSelect.addEventListener('change', () => {
-    if (providerSelect.value === 'offline') {
-        setSearchEnabled(false);
-        addMsg(
-            'ai',
-            '💻 Offline Mode is coming soon. This option will be available in a future update.',
-            'Coming Soon'
-        );
-    }
+    if (providerSelect.value === 'offline') setSearchEnabled(false);
     updateUI();
   });
 
-  geminiSubSelect.addEventListener('change', updateUI);
+  geminiSubSelect.addEventListener('change', () => {
+    if (geminiSubSelect.value === 'pro') setSearchEnabled(false);
+    updateUI();
+  });
 
   searchToggle.addEventListener('click', () => {
-    if (providerSelect.value !== 'gemini') return;
+    if (providerSelect.value !== 'online' || geminiSubSelect.value !== 'flash') return;
     setSearchEnabled(!searchEnabled);
   });
 
-  updateUI();
-
-  function typeText(element, text, via) {
-      element.innerHTML = ""; 
-      let i = 0; let speed = 15;
-      if(text.length > 200) speed = 5;
-      function typing() {
-          if (i < text.length) {
-              if(text.charAt(i) === '<') {
-                  let tagEnd = text.indexOf('>', i);
-                  if(tagEnd !== -1) {
-                      element.innerHTML += text.substring(i, tagEnd + 1);
-                      i = tagEnd + 1;
-                      setTimeout(typing, speed);
-                      return;
-                  }
-              }
-              element.innerHTML += text.charAt(i);
-              i++;
-              msgs.scrollTop = msgs.scrollHeight; 
-              setTimeout(typing, speed);
-          } else {
-              element.innerHTML = marked.parse(text);
-              if(via) {
-                  const tag = document.createElement('div');
-                  tag.className = 'via-tag'; tag.innerText = via;
-                  element.parentElement.appendChild(tag);
-              }
-              msgs.scrollTop = msgs.scrollHeight;
-          }
+  function typeText(element, text) {
+    element.textContent = '';
+    let i = 0;
+    const speed = text.length > 200 ? 5 : 14;
+    function typing() {
+      if (i < text.length) {
+        element.textContent += text.charAt(i++);
+        msgs.scrollTop = msgs.scrollHeight;
+        setTimeout(typing, speed);
+      } else {
+        element.innerHTML = renderMarkdown(text);
+        addBrandTag(element.parentElement);
+        msgs.scrollTop = msgs.scrollHeight;
       }
-      typing();
+    }
+    typing();
   }
 
-  function addMsg(role, text, via, animate=false) {
+  function addMsg(role, text, animate = false) {
     const div = document.createElement('div');
     div.className = 'msg ' + role;
     const bubble = document.createElement('div');
     bubble.className = 'bubble';
     div.appendChild(bubble);
     msgs.appendChild(div);
-    if(animate && role === 'ai') {
-        typeText(bubble, text, via); 
+
+    if (animate && role === 'ai') {
+      typeText(bubble, text);
+    } else if (role === 'ai') {
+      bubble.innerHTML = renderMarkdown(text);
+      addBrandTag(div);
     } else {
-        if(role === 'ai') bubble.innerHTML = marked.parse(text);
-        else bubble.textContent = text;
+      bubble.textContent = text;
     }
     msgs.scrollTop = msgs.scrollHeight;
   }
 
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // Render Free instances can sleep after inactivity. Retry the API request
+  // while the service wakes instead of refreshing or navigating the page.
+  async function requestChatWithWake(payload, onWake) {
+    const maxAttempts = 13;
+    let lastError = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+          body: JSON.stringify(payload)
+        });
+
+        const contentType = response.headers.get('content-type') || '';
+        if (response.status === 429 || (response.status >= 400 && response.status < 500)) {
+          const errorText = await response.text().catch(() => 'Request rejected');
+          throw Object.assign(new Error(errorText || `HTTP ${response.status}`), { retryable: false });
+        }
+
+        if (!response.ok || !contentType.includes('application/json')) {
+          throw new Error(`Service is starting (HTTP ${response.status})`);
+        }
+
+        return await response.json();
+      } catch (error) {
+        lastError = error;
+        if (error.retryable === false) throw error;
+        if (attempt === maxAttempts - 1) break;
+        onWake(attempt + 1, maxAttempts - 1);
+        await sleep(5000);
+      }
+    }
+
+    throw new Error('The server is still waking up or temporarily unavailable. Please try again shortly. ' + (lastError?.message || ''));
+  }
+
   async function send() {
     const txt = inp.value.trim();
-    if(!txt) return;
-    
-    if (providerSelect.value === 'offline') {
-        addMsg('user', txt);
-        inp.value = '';
-        addMsg(
-            'ai',
-            '💻 Offline Mode is coming soon. This option will be available in a future update.',
-            'Coming Soon',
-            true
-        );
-        return;
-    }
+    if (!txt || sending || providerSelect.value === 'offline') return;
 
     addMsg('user', txt);
     inp.value = '';
 
-    const finalModel = searchEnabled
-        ? 'gemini-search'
-        : (geminiSubSelect.value === 'pro' ? 'cloudflare-pro' : 'cloudflare-speed');
-    
-    chatHistory.push({ role: "user", content: txt });
-    if(chatHistory.length > 10) chatHistory = chatHistory.slice(-10);
+    const useSearch = searchEnabled && geminiSubSelect.value === 'flash';
+    const finalModel = useSearch
+      ? 'gemini-search'
+      : (geminiSubSelect.value === 'pro' ? 'cloudflare-pro' : 'cloudflare-speed');
+
+    chatHistory.push({ role: 'user', content: txt });
+    if (chatHistory.length > 10) chatHistory = chatHistory.slice(-10);
 
     const loadDiv = document.createElement('div');
     loadDiv.className = 'msg ai';
     loadDiv.innerHTML = '<div class="bubble"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>';
     msgs.appendChild(loadDiv);
     msgs.scrollTop = msgs.scrollHeight;
+    sending = true;
+    updateUI();
 
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ message: txt, history: chatHistory, model: finalModel, searchEnabled }) 
-      });
-      const data = await res.json();
+      const data = await requestChatWithWake(
+        { message: txt, history: chatHistory, model: finalModel, searchEnabled: useSearch },
+        (attempt, total) => {
+          const bubble = loadDiv.querySelector('.bubble');
+          if (bubble) bubble.textContent = `Server is waking up on Render. Reconnecting (${attempt}/${total})...`;
+        }
+      );
+
       loadDiv.remove();
-      if(data.output && data.output.content) {
-        chatHistory.push({ role: "model", content: data.output.content });
-        addMsg('ai', data.output.content, data.output.via, true);
+      if (data.output && typeof data.output.content === 'string') {
+        chatHistory.push({ role: 'model', content: data.output.content });
+        if (chatHistory.length > 12) chatHistory = chatHistory.slice(-12);
+        addMsg('ai', data.output.content, true);
       } else {
-        addMsg('ai', "Error: No response");
+        addMsg('ai', 'The server returned an unexpected response. Please try again.');
       }
-    } catch(e) {
+    } catch (error) {
       loadDiv.remove();
-      addMsg('ai', "Error: Check Connection");
+      addMsg('ai', error.message || 'Connection problem. Please try again.');
+    } finally {
+      sending = false;
+      updateUI();
+      if (providerSelect.value !== 'offline') inp.focus();
     }
   }
 
   themeBtn.onclick = () => {
-      document.body.classList.toggle('theme-dark');
-      themeBtn.innerText = document.body.classList.contains('theme-dark') ? '🎨' : '🌙';
+    document.body.classList.toggle('theme-dark');
+    themeBtn.innerText = document.body.classList.contains('theme-dark') ? '🎨' : '🌙';
   };
   btn.onclick = send;
-  inp.onkeydown = (e) => e.key === 'Enter' ? send() : null;
+  inp.onkeydown = event => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      send();
+    }
+  };
+
+  updateUI();
 </script>
 </body>
 </html>
