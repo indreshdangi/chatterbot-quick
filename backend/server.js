@@ -148,8 +148,6 @@ async function generateWithGemma(message, history) {
     chat_template_kwargs: {
         enable_thinking: false
     }
-})
-        })
     });
 
     let data;
