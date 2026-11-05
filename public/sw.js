@@ -1,4 +1,4 @@
-const CACHE_NAME = 'indservices-cache-v1';
+const CACHE_NAME = 'indservices-cache-v2';
 
 const ASSETS = [
   '/',
@@ -15,7 +15,15 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(
+        keys
+          .filter(key => key.startsWith('indservices-cache-') && key !== CACHE_NAME)
+          .map(key => caches.delete(key))
+      ))
+      .then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener('fetch', event => {
