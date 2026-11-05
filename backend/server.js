@@ -132,32 +132,34 @@ async function generateWithGemma(message, history) {
         ...sanitizeCloudflareMessages(history, message)
     ];
 
-    const endpoint =
-        `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/${MODEL_GEMMA_SPEED}`;
+const endpoint =
+    `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/${MODEL_GEMMA_SPEED}`;
 
-    const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-            "Authorization": `Bearer ${CLOUDFLARE_API_TOKEN}`,
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-    messages,
-    temperature: 0.7,
-    max_tokens: 8192,
-    chat_template_kwargs: {
-        enable_thinking: false
-    }
-    });
+const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+        "Authorization": `Bearer ${CLOUDFLARE_API_TOKEN}`,
+        "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+        messages,
+        temperature: 0.7,
+        max_tokens: 8192,
+        chat_template_kwargs: {
+            enable_thinking: false
+        }
+    })
+});
 
-    let data;
+let data;
 
-    try {
-        data = await response.json();
-    } catch (parseError) {
-        throw new Error(
-            `Cloudflare Workers AI returned an unreadable response (HTTP ${response.status}).`
-        );
+try {
+    data = await response.json();
+} catch (parseError) {
+    throw new Error(
+        `Cloudflare Workers AI returned an unreadable response (HTTP ${response.status}).`
+    );
+}
     }
 
     if (!response.ok || data.success === false) {
