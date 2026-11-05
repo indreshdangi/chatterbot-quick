@@ -125,10 +125,41 @@
     button#sendBtn:active { transform: scale(0.9); }
     
     #geminiSubSelect {
-        display: none; padding: 8px; font-size: 11px; 
-        max-width: 100px; border-radius: 8px; flex-shrink: 0;
-        background: var(--user); border: 1px solid var(--accent); 
+        display: none; padding: 8px; font-size: 11px;
+        max-width: 112px; border-radius: 8px; flex-shrink: 0;
+        background: var(--user); border: 1px solid var(--accent);
         color: var(--text); text-overflow: ellipsis; font-weight: 700;
+    }
+
+    .search-toggle {
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--user);
+        color: var(--text);
+        font-size: 11px;
+        font-weight: 700;
+        white-space: nowrap;
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: all 0.2s ease;
+    }
+    .search-toggle.active {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+        box-shadow: 0 0 0 2px rgba(91,54,214,0.12);
+    }
+    .search-toggle:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+
+    @media(max-width: 420px) {
+        .footer { gap: 4px; padding: 8px 7px; }
+        #geminiSubSelect { max-width: 92px; padding: 7px 6px; }
+        .search-toggle { padding: 7px 7px; font-size: 10px; }
+        input { min-width: 35px; padding: 10px 10px; }
     }
 
     .disclaimer {
@@ -148,8 +179,8 @@
       <div class="logo">🇮🇳 Indresh 2.0</div>
       <div class="controls">
           <button class="theme-btn" id="themeToggle" title="Change Theme">🌙</button>
-          <select id="providerSelect">
-              <option value="groq">⚡ Turbo Mode</option>
+          <select id="providerSelect" aria-label="Chat mode">
+              <option value="offline">💻 Offline Mode</option>
               <option value="gemini" selected>🧠 Intelligent Mode</option>
           </select>
       </div>
@@ -161,10 +192,12 @@
 
     <div class="footer-container">
         <div class="footer">
-            <select id="geminiSubSelect">
-                <option value="flash">🚀 Speed (2.5)</option>
-                <option value="pro">💎 Deep (2.5)</option>
+            <select id="geminiSubSelect" aria-label="AI model">
+                <option value="flash">🚀 Speed (Gemma 4)</option>
+                <option value="pro">💎 Pro (Nemotron 3)</option>
             </select>
+            <button id="searchToggle" class="search-toggle" type="button"
+                    aria-pressed="false" title="Use Gemini with Google Search">🌐 Search</button>
             <input id="input" type="text" placeholder="Message..." autofocus autocomplete="off">
             <button id="sendBtn">➤</button>
         </div>
@@ -180,21 +213,57 @@
   const btn = document.getElementById('sendBtn');
   const providerSelect = document.getElementById('providerSelect');
   const geminiSubSelect = document.getElementById('geminiSubSelect');
+  const searchToggle = document.getElementById('searchToggle');
   const themeBtn = document.getElementById('themeToggle');
-  
+
   marked.use({ breaks: true });
   let chatHistory = [];
+  let searchEnabled = false;
 
   function updateUI() {
-    if(providerSelect.value === 'gemini') {
-        geminiSubSelect.style.display = 'block';
-        inp.placeholder = "Ask Indresh Intelligent...";
+    const offlineMode = providerSelect.value === 'offline';
+
+    geminiSubSelect.style.display = offlineMode ? 'none' : 'block';
+    searchToggle.disabled = offlineMode;
+
+    if (offlineMode) {
+        inp.placeholder = "Offline mode — coming soon...";
+    } else if (searchEnabled) {
+        inp.placeholder = "Search current information with Google...";
+    } else if (geminiSubSelect.value === 'pro') {
+        inp.placeholder = "Ask Indresh Pro...";
     } else {
-        geminiSubSelect.style.display = 'none';
-        inp.placeholder = "Ask Indresh Turbo...";
+        inp.placeholder = "Ask Indresh...";
     }
   }
-  providerSelect.addEventListener('change', updateUI);
+
+  function setSearchEnabled(enabled) {
+    searchEnabled = Boolean(enabled) && providerSelect.value === 'gemini';
+    searchToggle.classList.toggle('active', searchEnabled);
+    searchToggle.setAttribute('aria-pressed', String(searchEnabled));
+    searchToggle.textContent = searchEnabled ? '🌐 Search ON' : '🌐 Search';
+    updateUI();
+  }
+
+  providerSelect.addEventListener('change', () => {
+    if (providerSelect.value === 'offline') {
+        setSearchEnabled(false);
+        addMsg(
+            'ai',
+            '💻 Offline Mode is coming soon. This option will be available in a future update.',
+            'Coming Soon'
+        );
+    }
+    updateUI();
+  });
+
+  geminiSubSelect.addEventListener('change', updateUI);
+
+  searchToggle.addEventListener('click', () => {
+    if (providerSelect.value !== 'gemini') return;
+    setSearchEnabled(!searchEnabled);
+  });
+
   updateUI();
 
   function typeText(element, text, via) {
@@ -249,13 +318,24 @@
     const txt = inp.value.trim();
     if(!txt) return;
     
-    let finalModel = "groq";
-    if (providerSelect.value === 'gemini') {
-        finalModel = "gemini-" + geminiSubSelect.value;
+    if (providerSelect.value === 'offline') {
+        addMsg('user', txt);
+        inp.value = '';
+        addMsg(
+            'ai',
+            '💻 Offline Mode is coming soon. This option will be available in a future update.',
+            'Coming Soon',
+            true
+        );
+        return;
     }
-    
+
     addMsg('user', txt);
     inp.value = '';
+
+    const finalModel = searchEnabled
+        ? 'gemini-search'
+        : (geminiSubSelect.value === 'pro' ? 'cloudflare-pro' : 'cloudflare-speed');
     
     chatHistory.push({ role: "user", content: txt });
     if(chatHistory.length > 10) chatHistory = chatHistory.slice(-10);
@@ -270,7 +350,7 @@
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ message: txt, history: chatHistory, model: finalModel }) 
+        body: JSON.stringify({ message: txt, history: chatHistory, model: finalModel, searchEnabled }) 
       });
       const data = await res.json();
       loadDiv.remove();
